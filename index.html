@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Công Cụ Soạn Thảo Giáo Án</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS phục vụ từ server nội bộ (tránh bị trình duyệt chặn CDN) -->
+  <script src="/static/supabase.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { nunito: ["Nunito","sans-serif"] },
+          keyframes: {
+            wiggle:  {"0%,100%":{transform:"rotate(-3deg)"},"50%":{transform:"rotate(3deg)"}},
+            bounce2: {"0%,100%":{transform:"translateY(0)"},"50%":{transform:"translateY(-10px)"}},
+            fadein:  {from:{opacity:0,transform:"translateY(14px)"},to:{opacity:1,transform:"translateY(0)"}},
+            pop:     {"0%":{transform:"scale(.85)",opacity:0},"70%":{transform:"scale(1.06)"},"100%":{transform:"scale(1)",opacity:1}},
+          },
+          animation: {
+            wiggle:"wiggle 1.6s ease-in-out infinite",
+            bounce2:"bounce2 1.4s ease-in-out infinite",
+            fadein:"fadein .45s ease both",
+            pop:"pop .38s cubic-bezier(.175,.885,.32,1.275) both",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body{font-family:"Nunito",sans-serif;}
+    .dropzone.dragover{border-color:#3b82f6;background:#eff6ff;box-shadow:0 0 0 4px rgba(59,130,246,.2);}
+    @keyframes dot{0%,80%,100%{opacity:0;transform:scale(.6)}40%{opacity:1;transform:scale(1)}}
+    .dot{display:inline-block;border-radius:50%;width:10px;height:10px;animation:dot 1.4s infinite;}
+    .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+    .tab-btn.active{border-bottom:3px solid currentColor;}
+    #quota-bar{transition:width .5s ease;}
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-sky-50 via-blue-50 to-teal-50 min-h-screen font-nunito">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MÀN HÌNH ĐĂNG NHẬP
+══════════════════════════════════════════════════════════════════ -->
+<div id="login-screen" class="hidden min-h-screen flex flex-col items-center justify-center px-4">
+  <div class="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center animate-fadein">
+    <!-- Icon -->
+    <div class="flex justify-center mb-4">
+      <svg class="w-16 h-16 animate-wiggle drop-shadow" viewBox="0 0 64 64" fill="none">
+        <rect x="22" y="6" width="20" height="44" rx="4" fill="#FBBF24" stroke="#F59E0B" stroke-width="2"/>
+        <polygon points="22,50 42,50 32,62" fill="#F87171" stroke="#EF4444" stroke-width="1.5"/>
+        <rect x="22" y="6" width="20" height="8" rx="4" fill="#E5E7EB" stroke="#D1D5DB" stroke-width="2"/>
+        <rect x="29" y="14" width="6" height="28" rx="3" fill="#FDE68A"/>
+      </svg>
+    </div>
+    <h1 class="text-2xl font-black text-blue-700 mb-1">Công Cụ Soạn Thảo Giáo Án</h1>
+    <p class="text-gray-400 text-sm font-semibold mb-7">Đăng nhập để bắt đầu sử dụng miễn phí</p>
+
+    <!-- Google login -->
+    <button id="btn-google" onclick="signInGoogle()"
+      class="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 hover:border-blue-400 hover:shadow-md text-gray-700 font-black text-base rounded-2xl py-3 px-4 transition-all duration-200 hover:scale-105 active:scale-95">
+      <!-- Google icon SVG -->
+      <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      Đăng nhập với Google
+    </button>
+
+    <div id="login-loading" class="hidden mt-4 flex items-center justify-center gap-2">
+      <div class="flex gap-1"><span class="dot bg-blue-400"></span><span class="dot bg-blue-400"></span><span class="dot bg-blue-400"></span></div>
+      <span class="text-blue-500 font-bold text-sm">Đang chuyển hướng...</span>
+    </div>
+    <div id="login-err" class="hidden mt-3 text-red-500 font-bold text-sm"></div>
+
+    <div class="mt-6 flex items-center justify-center gap-4 text-xs text-gray-400 font-semibold">
+      <span>✅ Miễn phí 5 file/tháng</span>
+      <span>🔒 Không lưu file</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     APP CHÍNH (ẩn đến khi đăng nhập)
+══════════════════════════════════════════════════════════════════ -->
+<div id="main-app" class="hidden flex flex-col items-center px-4 py-8 min-h-screen">
+
+  <!-- User Header -->
+  <div id="user-header" class="w-full max-w-xl mb-5 bg-white rounded-2xl shadow-sm border border-blue-100 px-4 py-3 flex items-center gap-3 animate-fadein">
+    <img id="user-avatar" src="" alt="" class="w-9 h-9 rounded-full object-cover ring-2 ring-blue-200 hidden"/>
+    <div class="flex-1 min-w-0">
+      <p id="user-name" class="text-blue-700 font-black text-sm truncate"></p>
+      <div class="flex items-center gap-2 mt-0.5">
+        <!-- Plan badge -->
+        <span id="plan-badge-free" class="hidden bg-gray-100 text-gray-500 font-black text-xs px-2 py-0.5 rounded-full">Free</span>
+        <span id="plan-badge-pro"  class="hidden bg-gradient-to-r from-amber-400 to-orange-400 text-white font-black text-xs px-2 py-0.5 rounded-full">✨ Pro</span>
+        <!-- Quota (free only) -->
+        <span id="quota-text" class="hidden text-gray-400 font-bold text-xs"></span>
+      </div>
+    </div>
+    <!-- Quota bar (free only) -->
+    <div id="quota-bar-wrap" class="hidden w-20">
+      <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+        <div id="quota-bar" class="h-1.5 rounded-full bg-blue-400" style="width:0%"></div>
+      </div>
+    </div>
+    <!-- Upgrade button (free only) -->
+    <button id="btn-upgrade" onclick="showUpgradeModal()"
+      class="hidden bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs px-3 py-1.5 rounded-xl transition-all hover:scale-105 whitespace-nowrap">
+      Nâng cấp
+    </button>
+    <button onclick="signOut()" title="Đăng xuất"
+      class="text-gray-300 hover:text-red-400 transition-colors ml-1 flex-shrink-0">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Title -->
+  <div class="text-center mb-5 animate-fadein">
+    <div class="flex justify-center mb-2">
+      <svg class="w-12 h-12 animate-wiggle drop-shadow" viewBox="0 0 64 64" fill="none">
+        <rect x="22" y="6" width="20" height="44" rx="4" fill="#FBBF24" stroke="#F59E0B" stroke-width="2"/>
+        <polygon points="22,50 42,50 32,62" fill="#F87171" stroke="#EF4444" stroke-width="1.5"/>
+        <rect x="22" y="6" width="20" height="8" rx="4" fill="#E5E7EB" stroke="#D1D5DB" stroke-width="2"/>
+        <rect x="29" y="14" width="6" height="28" rx="3" fill="#FDE68A"/>
+      </svg>
+    </div>
+    <h1 class="text-2xl sm:text-3xl font-black text-blue-700 leading-tight">Công Cụ Soạn Thảo Giáo Án</h1>
+    <p class="mt-1 text-gray-400 font-semibold text-xs sm:text-sm">Chuẩn hóa định dạng · Bổ sung Năng lực số GDPT 2018</p>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="w-full max-w-xl mb-0 animate-fadein">
+    <div class="flex bg-white rounded-t-2xl border border-blue-100 border-b-0 overflow-hidden shadow-sm">
+      <button id="tab-fmt" onclick="switchTab('fmt')"
+        class="tab-btn active flex-1 py-3 px-4 font-black text-sm text-blue-600 border-blue-500 transition-all">
+        ✨ Chuẩn hóa định dạng
+      </button>
+      <div class="w-px bg-blue-100"></div>
+      <button id="tab-nls" onclick="switchTab('nls')"
+        class="tab-btn flex-1 py-3 px-4 font-black text-sm text-gray-400 border-transparent transition-all hover:text-emerald-600">
+        📚 Năng lực số
+      </button>
+    </div>
+  </div>
+
+  <!-- Card -->
+  <div class="w-full max-w-xl bg-white rounded-b-3xl rounded-tr-3xl shadow-xl border border-blue-100 border-t-0 p-6 sm:p-8 animate-fadein">
+
+    <!-- ── TAB 1: CHUẨN HÓA ── -->
+    <div id="pane-fmt">
+      <div id="dz1" class="dropzone flex flex-col items-center justify-center border-2 border-dashed border-blue-300 rounded-3xl py-10 px-6 cursor-pointer transition-all duration-300 bg-blue-50 hover:bg-blue-100 shadow-sm"
+        onclick="document.getElementById('fi1').click()">
+        <svg class="w-16 h-16 mb-3 text-blue-400 animate-bounce2" viewBox="0 0 80 80" fill="none">
+          <rect x="10" y="12" width="42" height="54" rx="6" fill="#BFDBFE"/>
+          <rect x="14" y="16" width="34" height="46" rx="4" fill="#EFF6FF"/>
+          <rect x="20" y="24" width="22" height="3" rx="1.5" fill="#93C5FD"/>
+          <rect x="20" y="31" width="18" height="3" rx="1.5" fill="#93C5FD"/>
+          <rect x="20" y="38" width="20" height="3" rx="1.5" fill="#93C5FD"/>
+          <rect x="20" y="45" width="14" height="3" rx="1.5" fill="#93C5FD"/>
+          <rect x="52" y="18" width="18" height="48" rx="5" fill="#FCA5A5"/>
+          <rect x="55" y="22" width="12" height="40" rx="3" fill="#FEE2E2"/>
+        </svg>
+        <p class="text-blue-700 font-bold text-lg text-center leading-snug">
+          Kéo thả giáo án, đề thi của<br/>Thầy/Cô vào đây nhé!
+        </p>
+        <p class="mt-1 text-xs text-gray-400 font-semibold">hoặc bấm để chọn · chỉ hỗ trợ <span class="text-blue-500">.docx</span></p>
+        <input id="fi1" type="file" accept=".docx" class="hidden" onchange="handleFile1(event)"/>
+      </div>
+      <div id="fi1-info" class="hidden mt-3 flex items-center gap-2 bg-blue-50 rounded-2xl px-4 py-3 border border-blue-200">
+        <svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v13a2 2 0 01-2 2z"/></svg>
+        <span id="fi1-name" class="text-blue-700 font-bold truncate text-sm flex-1"></span>
+        <button onclick="reset1()" class="text-gray-400 hover:text-red-400 transition-colors"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      </div>
+      <button id="btn1" onclick="runFormat()" class="hidden mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-black text-base rounded-2xl py-4 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95">
+        ✨ Chuẩn hóa ngay!
+      </button>
+      <div id="load1" class="hidden mt-4 flex flex-col items-center gap-3 bg-amber-50 rounded-2xl px-6 py-7 border border-amber-200">
+        <div class="flex gap-2"><span class="dot bg-amber-400"></span><span class="dot bg-amber-400"></span><span class="dot bg-amber-400"></span></div>
+        <p class="text-amber-700 font-bold text-center text-sm">Đang dọn dẹp font chữ và căn lề, Thầy/Cô đợi nhé...</p>
+        <div class="w-full bg-amber-200 rounded-full h-2 overflow-hidden">
+          <div id="prog1" class="h-2 bg-amber-500 rounded-full transition-all" style="width:0%"></div>
+        </div>
+      </div>
+      <div id="ok1" class="hidden mt-4 flex flex-col items-center gap-2 bg-emerald-50 rounded-2xl px-6 py-6 border border-emerald-200 animate-pop">
+        <svg class="w-12 h-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-emerald-700 font-black text-base">Xong rồi, Thầy/Cô ơi!</p>
+        <p class="text-emerald-600 text-xs font-semibold">File đã được chuẩn hóa và đang tải về tự động...</p>
+        <button onclick="reset1()" class="mt-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl text-sm hover:scale-105 transition-all">Xử lý file khác</button>
+      </div>
+      <div id="err1" class="hidden mt-4 flex flex-col items-center gap-2 bg-red-50 rounded-2xl px-6 py-6 border border-red-200 animate-pop">
+        <svg class="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <p id="err1-msg" class="text-red-600 font-bold text-center text-xs"></p>
+        <button onclick="reset1()" class="bg-red-400 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-sm hover:scale-105 transition-all">Thử lại</button>
+      </div>
+    </div>
+
+    <!-- ── TAB 2: NĂNG LỰC SỐ ── -->
+    <div id="pane-nls" class="hidden">
+      <div id="dz2" class="dropzone flex flex-col items-center justify-center border-2 border-dashed border-emerald-300 rounded-3xl py-8 px-6 cursor-pointer transition-all duration-300 bg-emerald-50 hover:bg-emerald-100 shadow-sm"
+        onclick="document.getElementById('fi2').click()">
+        <svg class="w-14 h-14 mb-3 text-emerald-400 animate-bounce2" viewBox="0 0 80 80" fill="none">
+          <rect x="12" y="8" width="56" height="64" rx="8" fill="#A7F3D0"/>
+          <rect x="18" y="14" width="44" height="52" rx="5" fill="#ECFDF5"/>
+          <rect x="24" y="22" width="32" height="3" rx="1.5" fill="#34D399"/>
+          <rect x="24" y="30" width="24" height="3" rx="1.5" fill="#34D399"/>
+          <rect x="24" y="38" width="28" height="3" rx="1.5" fill="#34D399"/>
+          <circle cx="60" cy="60" r="14" fill="#10B981"/>
+          <path d="M53 60l5 5 9-9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="text-emerald-700 font-bold text-base text-center leading-snug">Tải lên giáo án cần bổ sung<br/>Năng lực số nhé!</p>
+        <p class="mt-1 text-xs text-gray-400 font-semibold">chỉ hỗ trợ <span class="text-emerald-500">.docx</span></p>
+        <input id="fi2" type="file" accept=".docx" class="hidden" onchange="handleFile2(event)"/>
+      </div>
+      <div id="fi2-info" class="hidden mt-3 flex items-center gap-2 bg-emerald-50 rounded-2xl px-4 py-3 border border-emerald-200">
+        <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v13a2 2 0 01-2 2z"/></svg>
+        <span id="fi2-name" class="text-emerald-700 font-bold truncate text-sm flex-1"></span>
+        <button onclick="reset2()" class="text-gray-400 hover:text-red-400 transition-colors"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      </div>
+      <div class="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Môn học</label>
+          <select id="sel-mon" class="w-full border border-emerald-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
+            <option value="">— Chọn môn —</option>
+            <option value="toan">Toán</option><option value="ngu_van">Ngữ văn</option>
+            <option value="tieng_anh">Tiếng Anh</option><option value="vat_ly">Vật lý</option>
+            <option value="hoa_hoc">Hóa học</option><option value="sinh_hoc">Sinh học</option>
+            <option value="lich_su">Lịch sử</option><option value="dia_ly">Địa lý</option>
+            <option value="gdcd">GDCD / GDKTPL</option><option value="tin_hoc">Tin học</option>
+            <option value="cong_nghe">Công nghệ</option><option value="khoa_hoc">Khoa học (TH)</option>
+            <option value="tnxh">Tự nhiên & XH (TH)</option><option value="gdtc">GDTC</option>
+            <option value="am_nhac">Âm nhạc</option><option value="my_thuat">Mỹ thuật</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Cấp học</label>
+          <select id="sel-cap" class="w-full border border-emerald-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
+            <option value="">— Chọn cấp —</option>
+            <option value="tieu_hoc">Tiểu học (Lớp 1–5)</option>
+            <option value="thcs">THCS (Lớp 6–9)</option>
+            <option value="thpt">THPT (Lớp 10–12)</option>
+          </select>
+        </div>
+      </div>
+      <button id="btn-analyze" onclick="runAnalyze()" class="hidden mt-4 w-full bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white font-black text-sm rounded-2xl py-3 shadow transition-all hover:scale-105 active:scale-95">
+        🔍 Phân tích tiến trình bài dạy
+      </button>
+      <div id="analyzing" class="hidden mt-3 flex items-center gap-3 bg-teal-50 rounded-2xl px-4 py-3 border border-teal-200">
+        <div class="flex gap-1"><span class="dot bg-teal-400"></span><span class="dot bg-teal-400"></span><span class="dot bg-teal-400"></span></div>
+        <p class="text-teal-700 font-bold text-sm">Đang đọc tiến trình bài dạy...</p>
+      </div>
+      <div id="kw-box" class="hidden mt-3 animate-fadein">
+        <p class="text-xs font-black text-gray-400 uppercase tracking-wide mb-1.5">Từ khóa nhận dạng:</p>
+        <div id="kw-chips" class="flex flex-wrap gap-1.5"></div>
+      </div>
+      <div id="nls-preview" class="hidden mt-4 space-y-3 animate-fadein"></div>
+      <div id="nls-fallback" class="hidden mt-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-4 animate-fadein">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-amber-500">⚠️</span>
+          <p class="text-gray-600 font-bold text-xs">Không phát hiện cấu trúc hoạt động — hiển thị Năng lực số chung:</p>
+        </div>
+        <ul id="nls-fallback-list" class="space-y-1.5"></ul>
+      </div>
+      <div id="nls-empty" class="hidden mt-4 bg-amber-50 rounded-2xl border border-amber-200 p-4 text-center animate-fadein">
+        <p class="text-amber-600 font-bold text-sm">😅 Chưa có dữ liệu cho tổ hợp này. Thầy/Cô thử chọn môn/cấp khác nhé!</p>
+      </div>
+      <button id="btn2" onclick="runInsertNLS()" class="hidden mt-4 w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-base rounded-2xl py-4 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95">
+        📚 Chèn Năng lực số vào giáo án!
+      </button>
+      <div id="load2" class="hidden mt-4 flex flex-col items-center gap-3 bg-emerald-50 rounded-2xl px-6 py-7 border border-emerald-200">
+        <div class="flex gap-2"><span class="dot bg-emerald-400"></span><span class="dot bg-emerald-400"></span><span class="dot bg-emerald-400"></span></div>
+        <p class="text-emerald-700 font-bold text-center text-sm">Đang chèn Năng lực số vào giáo án...</p>
+      </div>
+      <div id="ok2" class="hidden mt-4 flex flex-col items-center gap-2 bg-emerald-50 rounded-2xl px-6 py-6 border border-emerald-300 animate-pop">
+        <svg class="w-12 h-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-emerald-700 font-black text-base">Đã chèn Năng lực số thành công!</p>
+        <p class="text-emerald-600 text-xs font-semibold">File đang tải về tự động...</p>
+        <button onclick="reset2()" class="mt-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl text-sm hover:scale-105 transition-all">Xử lý file khác</button>
+      </div>
+      <div id="err2" class="hidden mt-4 flex flex-col items-center gap-2 bg-red-50 rounded-2xl px-6 py-6 border border-red-200 animate-pop">
+        <svg class="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <p id="err2-msg" class="text-red-600 font-bold text-center text-xs"></p>
+        <button onclick="reset2()" class="bg-red-400 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-sm hover:scale-105 transition-all">Thử lại</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature chips -->
+  <div class="mt-5 flex flex-wrap justify-center gap-2 animate-fadein">
+    <span class="bg-white border border-blue-100 shadow-sm text-blue-600 font-bold text-xs px-3 py-1.5 rounded-full">📐 Căn lề A4</span>
+    <span class="bg-white border border-blue-100 shadow-sm text-blue-600 font-bold text-xs px-3 py-1.5 rounded-full">🖋️ Times New Roman 14</span>
+    <span class="bg-white border border-blue-100 shadow-sm text-blue-600 font-bold text-xs px-3 py-1.5 rounded-full">📊 Bảng AutoFit</span>
+    <span class="bg-white border border-blue-100 shadow-sm text-blue-600 font-bold text-xs px-3 py-1.5 rounded-full">➕ Công thức Toán</span>
+    <span class="bg-white border border-emerald-100 shadow-sm text-emerald-600 font-bold text-xs px-3 py-1.5 rounded-full">📚 NLS GDPT 2018</span>
+    <span class="bg-white border border-emerald-100 shadow-sm text-emerald-600 font-bold text-xs px-3 py-1.5 rounded-full">🎯 Theo tiến trình</span>
+  </div>
+  <p class="mt-4 text-xs text-gray-400 font-semibold">Xử lý hoàn toàn trên máy chủ cục bộ · Không lưu file</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MODAL NÂNG CẤP
+══════════════════════════════════════════════════════════════════ -->
+<div id="upgrade-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+  <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center animate-pop">
+    <div class="text-4xl mb-3">🚀</div>
+    <h2 class="text-xl font-black text-gray-800 mb-2">Nâng cấp lên Pro</h2>
+    <p id="upgrade-msg" class="text-gray-500 font-semibold text-sm mb-5">Sử dụng không giới hạn file mỗi tháng.</p>
+    <div class="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-4 mb-5 border border-blue-100">
+      <p class="text-3xl font-black text-blue-700">49.000đ<span class="text-base font-semibold text-gray-400">/tháng</span></p>
+      <ul class="mt-2 text-sm text-gray-600 font-semibold space-y-1 text-left">
+        <li>✅ Không giới hạn file</li>
+        <li>✅ Tất cả tính năng chuẩn hóa</li>
+        <li>✅ Bổ sung Năng lực số thông minh</li>
+        <li>✅ Hỗ trợ ưu tiên</li>
+      </ul>
+    </div>
+    <a href="mailto:contact@example.com?subject=Nâng cấp Pro - Công cụ Giáo án"
+      class="block w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-black text-base rounded-2xl py-3 mb-3 transition-all hover:scale-105">
+      Liên hệ nâng cấp ngay
+    </a>
+    <button onclick="hideUpgradeModal()" class="text-gray-400 hover:text-gray-600 font-bold text-sm transition-colors">Để sau</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// SUPABASE AUTH
+// ══════════════════════════════════════════════════════════════════
+let _supabase = null;
+let _session  = null;
+let _cfg      = { auth_enabled: false, free_quota: 5 };
+
+async function initApp() {
+  // 1. Lấy config từ backend
+  try {
+    const r = await fetch("/config");
+    _cfg = await r.json();
+  } catch (e) {
+    console.warn("Không lấy được config:", e);
+  }
+
+  // 2. Khởi tạo Supabase client nếu auth enabled
+  if (_cfg.auth_enabled && _cfg.supabase_url && _cfg.supabase_anon_key) {
+    _supabase = window.supabase.createClient(_cfg.supabase_url, _cfg.supabase_anon_key);
+
+    // Lắng nghe thay đổi auth (xử lý cả redirect sau OAuth)
+    _supabase.auth.onAuthStateChange(async (event, session) => {
+      _session = session;
+      if (session) await onLoggedIn(session);
+      else onLoggedOut();
+    });
+
+    // Kiểm tra session hiện tại
+    const { data } = await _supabase.auth.getSession();
+    if (!data.session) onLoggedOut();
+    // nếu có session, onAuthStateChange đã gọi onLoggedIn
+
+  } else {
+    // Dev mode: không cần auth
+    _session = { access_token: "dev-token" };
+    await onLoggedIn(null);
+  }
+}
+
+async function signInGoogle() {
+  if (!_supabase) return;
+  show("login-loading"); hide("login-err");
+  document.getElementById("btn-google").disabled = true;
+  try {
+    const { error } = await _supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw error;
+  } catch (e) {
+    hide("login-loading");
+    document.getElementById("btn-google").disabled = false;
+    document.getElementById("login-err").textContent = "Đăng nhập thất bại: " + e.message;
+    show("login-err");
+  }
+}
+
+async function signOut() {
+  if (_supabase) await _supabase.auth.signOut();
+  _session = null;
+  onLoggedOut();
+}
+
+async function onLoggedIn(session) {
+  hide("login-screen");
+  show("main-app");
+  await loadUserInfo();
+  setupDnD();
+}
+
+function onLoggedOut() {
+  show("login-screen");
+  hide("main-app");
+}
+
+async function loadUserInfo() {
+  try {
+    const r = await authFetch("/me");
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Avatar + tên
+    const user = _session?.user || {};
+    const avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || "";
+    const name   = user.user_metadata?.full_name || user.user_metadata?.name || d.email || "Thầy/Cô";
+
+    if (avatar) {
+      const img = document.getElementById("user-avatar");
+      img.src = avatar; img.classList.remove("hidden");
+    }
+    document.getElementById("user-name").textContent = name;
+
+    // Plan badge + quota
+    if (!d.is_pro) {
+      show("plan-badge-free"); hide("plan-badge-pro");
+      const used  = d.usage ?? 0;
+      const quota = d.quota ?? _cfg.free_quota;
+      const pct   = Math.min(Math.round(used / quota * 100), 100);
+      document.getElementById("quota-text").textContent = `${used}/${quota} file tháng này`;
+      document.getElementById("quota-bar").style.width = pct + "%";
+      document.getElementById("quota-bar").className =
+        "h-1.5 rounded-full " + (pct >= 100 ? "bg-red-400" : pct >= 60 ? "bg-amber-400" : "bg-blue-400");
+      show("quota-text"); show("quota-bar-wrap"); show("btn-upgrade");
+    } else {
+      show("plan-badge-pro"); hide("plan-badge-free");
+      hide("quota-text"); hide("quota-bar-wrap"); hide("btn-upgrade");
+    }
+
+  } catch (e) {
+    // Dev mode: hiển thị minimal
+    document.getElementById("user-name").textContent = "Chế độ phát triển (dev)";
+    show("plan-badge-free");
+  }
+}
+
+// ── Token helper ──────────────────────────────────────────────────
+async function getToken() {
+  if (!_supabase) return null;
+  const { data } = await _supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+async function authFetch(url, opts = {}) {
+  const token = await getToken();
+  return fetch(url, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
+// ── Upgrade modal ─────────────────────────────────────────────────
+function showUpgradeModal(msg) {
+  if (msg) document.getElementById("upgrade-msg").textContent = msg;
+  show("upgrade-modal");
+}
+function hideUpgradeModal() { hide("upgrade-modal"); }
+
+// ── Handle 402 quota exceeded ─────────────────────────────────────
+async function handleApiResponse(r) {
+  if (r.status === 402) {
+    const e = await r.json();
+    showUpgradeModal(e.detail);
+    throw new Error("quota_exceeded");
+  }
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ detail: "Lỗi không xác định" }));
+    throw new Error(e.detail || "Lỗi không xác định");
+  }
+  return r;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DRAG & DROP + TABS
+// ══════════════════════════════════════════════════════════════════
+function setupDnD() {
+  _setupDz("dz1", f => handleFile1({ target: { files: [f] } }));
+  _setupDz("dz2", f => handleFile2({ target: { files: [f] } }));
+  document.getElementById("sel-mon").addEventListener("change", onSelectChange);
+  document.getElementById("sel-cap").addEventListener("change", onSelectChange);
+}
+function _setupDz(id, cb) {
+  const dz = document.getElementById(id);
+  dz.addEventListener("dragover",  e => { e.preventDefault(); dz.classList.add("dragover"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+  dz.addEventListener("drop", e => {
+    e.preventDefault(); dz.classList.remove("dragover");
+    if (e.dataTransfer.files.length) cb(e.dataTransfer.files[0]);
+  });
+}
+
+function switchTab(t) {
+  ["fmt","nls"].forEach(id => {
+    const isActive = id === t;
+    document.getElementById("pane-"+id).classList.toggle("hidden", !isActive);
+    const btn = document.getElementById("tab-"+id);
+    btn.classList.toggle("active", isActive);
+    btn.classList.toggle("text-blue-600",    id==="fmt" && isActive);
+    btn.classList.toggle("text-emerald-600", id==="nls" && isActive);
+    btn.classList.toggle("text-gray-400",    !isActive);
+    btn.classList.toggle("border-blue-500",    id==="fmt" && isActive);
+    btn.classList.toggle("border-emerald-500", id==="nls" && isActive);
+    btn.classList.toggle("border-transparent", !isActive);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB 1 – CHUẨN HÓA
+// ══════════════════════════════════════════════════════════════════
+let file1 = null, piv1 = null;
+
+function handleFile1(e) {
+  const f = e.target.files[0];
+  if (!f?.name.toLowerCase().endsWith(".docx")) { showErr1("Chọn file .docx nhé!"); return; }
+  file1 = f;
+  document.getElementById("fi1-name").textContent = f.name;
+  show("fi1-info"); show("btn1"); hide("load1"); hide("ok1"); hide("err1");
+}
+
+async function runFormat() {
+  if (!file1) return;
+  hide("btn1"); hide("fi1-info"); hide("err1"); show("load1");
+  const bar = document.getElementById("prog1");
+  let pct = 0;
+  piv1 = setInterval(() => { if (pct < 85) { pct += Math.random()*7; bar.style.width = Math.min(pct,85)+"%"; } }, 350);
+  try {
+    const fd = new FormData(); fd.append("file", file1);
+    const r  = await handleApiResponse(await authFetch("/process", { method:"POST", body:fd }));
+    clearInterval(piv1); bar.style.width="100%";
+    await triggerDownload(r);
+    hide("load1"); show("ok1");
+    await loadUserInfo();   // cập nhật quota
+  } catch(e) {
+    clearInterval(piv1); hide("load1");
+    if (e.message !== "quota_exceeded") showErr1("Có lỗi: " + e.message);
+    else { show("fi1-info"); show("btn1"); }
+  }
+}
+function showErr1(m) { document.getElementById("err1-msg").textContent=m; show("err1"); }
+function reset1() {
+  file1=null; clearInterval(piv1);
+  document.getElementById("fi1").value="";
+  document.getElementById("prog1").style.width="0%";
+  ["fi1-info","btn1","load1","ok1","err1"].forEach(hide);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB 2 – NĂNG LỰC SỐ
+// ══════════════════════════════════════════════════════════════════
+let file2=null, analysisOk=false;
+
+function handleFile2(e) {
+  const f = e.target.files[0];
+  if (!f?.name.toLowerCase().endsWith(".docx")) { showErr2("Chọn file .docx nhé!"); return; }
+  file2 = f;
+  document.getElementById("fi2-name").textContent = f.name;
+  show("fi2-info"); clearAnalysis(); maybeShowAnalyzeBtn();
+  hide("load2"); hide("ok2"); hide("err2");
+}
+function onSelectChange() { clearAnalysis(); maybeShowAnalyzeBtn(); }
+function maybeShowAnalyzeBtn() {
+  const mon = document.getElementById("sel-mon").value;
+  const cap = document.getElementById("sel-cap").value;
+  if (file2 && mon && cap) show("btn-analyze"); else hide("btn-analyze");
+}
+function clearAnalysis() {
+  analysisOk=false;
+  ["btn2","kw-box","nls-preview","nls-fallback","nls-empty","analyzing"].forEach(hide);
+  document.getElementById("nls-preview").innerHTML="";
+  document.getElementById("kw-chips").innerHTML="";
+  document.getElementById("nls-fallback-list").innerHTML="";
+}
+
+async function runAnalyze() {
+  if (!file2) return;
+  const mon=document.getElementById("sel-mon").value, cap=document.getElementById("sel-cap").value;
+  if (!mon||!cap) return;
+  clearAnalysis(); hide("btn-analyze"); show("analyzing");
+  try {
+    const fd=new FormData(); fd.append("file",file2); fd.append("mon",mon); fd.append("cap",cap);
+    const r = await fetch("/analyze-nls-flow", { method:"POST", body:fd });
+    hide("analyzing");
+    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||"Lỗi"); }
+    renderAnalysis(await r.json());
+    analysisOk=true; show("btn2"); show("btn-analyze");
+  } catch(e) {
+    hide("analyzing"); show("btn-analyze"); showErr2("Lỗi phân tích: "+e.message);
+  }
+}
+
+const ACT_COLORS = {
+  khoi_dong:  {bg:"bg-yellow-50", border:"border-yellow-300", icon:"🌟", head:"text-yellow-700"},
+  hinh_thanh: {bg:"bg-blue-50",   border:"border-blue-300",   icon:"📖", head:"text-blue-700"},
+  luyen_tap:  {bg:"bg-violet-50", border:"border-violet-300", icon:"✏️", head:"text-violet-700"},
+  van_dung:   {bg:"bg-orange-50", border:"border-orange-300", icon:"🚀", head:"text-orange-700"},
+  danh_gia:   {bg:"bg-emerald-50",border:"border-emerald-300",icon:"✅", head:"text-emerald-700"},
+};
+function renderAnalysis(data) {
+  if (data.keywords?.length) {
+    document.getElementById("kw-chips").innerHTML=data.keywords.map(k=>
+      `<span class="bg-teal-100 text-teal-700 font-bold text-xs px-2.5 py-1 rounded-full">${k}</span>`
+    ).join(""); show("kw-box");
+  }
+  if (data.activities?.length) {
+    document.getElementById("nls-preview").innerHTML=data.activities.map(act=>{
+      const c=ACT_COLORS[act.type]||{bg:"bg-gray-50",border:"border-gray-200",icon:"•",head:"text-gray-700"};
+      const items=act.nls.map(s=>`<li class="flex items-start gap-1.5 text-xs text-gray-700 font-semibold"><span class="text-emerald-500 mt-0.5 flex-shrink-0">+</span><span>${s}</span></li>`).join("");
+      return `<div class="${c.bg} ${c.border} border rounded-2xl p-3"><p class="${c.head} font-black text-sm mb-1.5">${c.icon} ${act.name}</p><ul class="space-y-1.5">${items}</ul></div>`;
+    }).join(""); show("nls-preview");
+  } else if (data.fallback?.length) {
+    document.getElementById("nls-fallback-list").innerHTML=data.fallback.map(s=>
+      `<li class="flex items-start gap-1.5 text-xs text-gray-700 font-semibold"><span class="text-emerald-500 flex-shrink-0">+</span><span>${s}</span></li>`
+    ).join(""); show("nls-fallback");
+  } else show("nls-empty");
+}
+
+async function runInsertNLS() {
+  if (!file2||!analysisOk) return;
+  const mon=document.getElementById("sel-mon").value, cap=document.getElementById("sel-cap").value;
+  hide("btn2"); hide("btn-analyze"); hide("fi2-info"); hide("err2"); show("load2");
+  try {
+    const fd=new FormData(); fd.append("file",file2); fd.append("mon",mon); fd.append("cap",cap);
+    const r=await handleApiResponse(await authFetch("/insert-nls-smart",{method:"POST",body:fd}));
+    await triggerDownload(r);
+    hide("load2"); show("ok2");
+    await loadUserInfo();
+  } catch(e) {
+    hide("load2");
+    if (e.message!=="quota_exceeded") showErr2("Có lỗi: "+e.message);
+    else { show("btn2"); show("btn-analyze"); }
+  }
+}
+function showErr2(m){document.getElementById("err2-msg").textContent=m;show("err2");}
+function reset2(){
+  file2=null;analysisOk=false;
+  document.getElementById("fi2").value="";
+  document.getElementById("sel-mon").value="";
+  document.getElementById("sel-cap").value="";
+  ["fi2-info","btn-analyze","btn2","analyzing","load2","ok2","err2",
+   "kw-box","nls-preview","nls-fallback","nls-empty"].forEach(hide);
+  document.getElementById("nls-preview").innerHTML="";
+  document.getElementById("kw-chips").innerHTML="";
+  document.getElementById("nls-fallback-list").innerHTML="";
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SHARED
+// ══════════════════════════════════════════════════════════════════
+function show(id){document.getElementById(id)?.classList.remove("hidden");}
+function hide(id){document.getElementById(id)?.classList.add("hidden");}
+
+async function triggerDownload(response){
+  const blob=await response.blob();
+  const cd=response.headers.get("content-disposition")||"";
+  let name="giaoan_output.docx";
+  const m=cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i);
+  if(m)name=decodeURIComponent(m[1]);
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
+// Khởi động
+initApp();
+</script>
+</body>
+</html>
