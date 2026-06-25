@@ -253,3 +253,143 @@ CATEGORY_NAMES = {
     "5": "Giải quyết vấn đề",
     "6": "Ứng dụng trí tuệ nhân tạo",
 }
+
+# ============================================================
+# CÔNG CỤ SỐ TƯƠNG ỨNG TỪNG MÃ NLS
+# Chỉ gợi ý — GV/HS có thể thay bằng công cụ khác phù hợp bối cảnh
+# ============================================================
+CODE_TO_TOOLS: dict[str, list[str]] = {
+    # ── 1.1 Tìm kiếm ──────────────────────────────────────────────────────────
+    "1.1TC1a": ["Google Search", "ChatGPT", "thư viện số trường"],
+    "1.1TC1b": ["Google Search (từ khóa nâng cao)", "ChatGPT", "Bing"],
+    "1.1TC1c": ["Google Search", "Google Scholar", "thư mục kết quả"],
+    "1.1TC1d": ["Google Search (Boolean)", "ChatGPT", "chiến lược tìm kiếm"],
+    "1.1TC2a": ["Google Search", "YouTube Giáo dục", "sơ đồ tư duy số"],
+    "1.1TC2b": ["Google Search nâng cao", "ChatGPT", "Notion / Google Keep"],
+    "1.1TC2c": ["Google Drive", "Bookmarks trình duyệt", "Pocket"],
+    "1.1TC2d": ["Google Search (nâng cao)", "ChatGPT", "Zotero"],
+    # ── 1.2 Đánh giá ──────────────────────────────────────────────────────────
+    "1.2TC1a": ["Google Scholar", "Snopes.com", "FactCheck.org"],
+    "1.2TC1b": ["Google Scholar", "Wikipedia (xem nguồn)", "thư viện điện tử"],
+    "1.2TC2a": ["Google Scholar", "FactCheck websites", "AI phát hiện tin giả"],
+    "1.2TC2b": ["Google Scholar", "thư viện điện tử Việt Nam", "PubMed"],
+    # ── 1.3 Quản lý ───────────────────────────────────────────────────────────
+    "1.3TC1a": ["Google Drive", "OneDrive", "thư mục máy tính"],
+    "1.3TC1b": ["Google Drive (thư mục)", "OneDrive", "Notion"],
+    "1.3TC2a": ["Google Drive", "Dropbox", "Zotero"],
+    "1.3TC2b": ["Notion", "Google Drive", "OneNote"],
+    # ── 2.1 Tương tác ─────────────────────────────────────────────────────────
+    "2.1TC1a": ["Zalo", "Microsoft Teams", "Google Meet", "Zoom"],
+    "2.1TC1b": ["Zalo", "email", "Google Classroom"],
+    "2.1TC2a": ["Zalo", "Teams", "Zoom", "Google Meet", "Discord"],
+    "2.1TC2b": ["Facebook Group", "Zalo nhóm", "Teams", "Padlet"],
+    # ── 2.2 Chia sẻ ───────────────────────────────────────────────────────────
+    "2.2TC1a": ["Google Drive", "Zalo", "Padlet", "WeTransfer"],
+    "2.2TC1b": ["Google Classroom", "Zalo nhóm", "Microsoft Teams"],
+    "2.2TC1c": ["Google Docs (trích dẫn)", "Word (References)", "Zotero"],
+    "2.2TC2a": ["Google Drive (chia sẻ link)", "Zalo", "Padlet", "QR Code"],
+    "2.2TC2b": ["Padlet", "Wakelet", "Google Sites"],
+    "2.2TC2c": ["Zotero", "Word / Google Docs (bibliography)"],
+    # ── 2.3 Công dân số ───────────────────────────────────────────────────────
+    "2.3TC1a": ["Cổng dịch vụ công quốc gia", "ứng dụng VNeID"],
+    "2.3TC1b": ["VNeID", "ứng dụng chính phủ số Việt Nam"],
+    "2.3TC2a": ["Cổng dịch vụ công", "VssID", "VNeID"],
+    "2.3TC2b": ["mạng xã hội", "diễn đàn trực tuyến"],
+    # ── 2.4 Hợp tác ───────────────────────────────────────────────────────────
+    "2.4TC1a": ["Google Docs", "Padlet", "Miro", "Jamboard"],
+    "2.4TC2a": ["Google Docs", "Microsoft 365", "Miro", "Trello"],
+    # ── 2.5 Ứng xử mạng ───────────────────────────────────────────────────────
+    "2.5TC1a": ["Facebook", "TikTok", "Zalo (thực hành quy tắc)"],
+    "2.5TC1b": ["Zalo", "email", "Google Meet (phép lịch sự)"],
+    "2.5TC1c": ["các nền tảng quốc tế (ý thức văn hóa)"],
+    "2.5TC2a": ["Facebook", "Zalo", "TikTok (phân tích bình luận)"],
+    "2.5TC2b": ["Google Meet", "Zoom (ứng xử họp trực tuyến)"],
+    "2.5TC2c": ["các nền tảng đa ngôn ngữ / đa quốc gia"],
+    # ── 2.6 Danh tính số ──────────────────────────────────────────────────────
+    "2.6TC1a": ["Google Account", "Facebook", "Zalo"],
+    "2.6TC1b": ["cài đặt quyền riêng tư Google / Facebook"],
+    "2.6TC1c": ["Google Dashboard", "cài đặt tài khoản số"],
+    "2.6TC2a": ["Google Account", "LinkedIn", "GitHub"],
+    "2.6TC2b": ["Privacy Checkup Google", "Facebook Privacy Settings"],
+    "2.6TC2c": ["Google Dashboard", "Facebook Activity Log"],
+    # ── 3.1 Phát triển nội dung ───────────────────────────────────────────────
+    "3.1TC1a": ["Canva", "Google Slides", "PowerPoint", "Padlet"],
+    "3.1TC1b": ["Canva", "CapCut", "Google Slides", "Blog WordPress"],
+    "3.1TC2a": ["Canva", "Adobe Express", "CapCut", "Premiere Rush"],
+    "3.1TC2b": ["Canva", "CapCut (video)", "Podcast (Anchor)", "Blog"],
+    # ── 3.2 Tích hợp nội dung ─────────────────────────────────────────────────
+    "3.2TC1a": ["Canva (remix)", "Google Slides", "Word / Google Docs"],
+    "3.2TC2a": ["Canva", "Adobe Express", "PowerPoint (tái sử dụng)"],
+    # ── 3.3 Bản quyền ─────────────────────────────────────────────────────────
+    "3.3TC1a": ["Creative Commons Search", "Unsplash", "Pixabay"],
+    "3.3TC2a": ["Creative Commons", "Google Images (filter: license)"],
+    # ── 3.4 Lập trình ─────────────────────────────────────────────────────────
+    "3.4TC1a": ["Scratch (scratch.mit.edu)", "Code.org", "Tynker"],
+    "3.4TC2a": ["Python / Thonny", "Scratch", "App Inventor (MIT)"],
+    # ── 4.1 Bảo vệ thiết bị ───────────────────────────────────────────────────
+    "4.1TC1a": ["Windows Defender", "cài đặt bảo mật máy tính / điện thoại"],
+    "4.1TC1b": ["Windows Security", "phần mềm diệt virus miễn phí"],
+    "4.1TC1c": ["Windows Defender", "Kaspersky Free", "Bitdefender Free"],
+    "4.1TC1d": ["cài đặt trình duyệt", "cài đặt Windows / Android"],
+    "4.1TC2a": ["Windows Defender", "cài đặt bảo mật nâng cao"],
+    "4.1TC2b": ["Windows Security Center", "phần mềm diệt virus"],
+    "4.1TC2c": ["Windows Defender", "VPN đáng tin cậy", "mật khẩu mạnh"],
+    "4.1TC2d": ["cài đặt quyền riêng tư trình duyệt Chrome / Firefox"],
+    # ── 4.2 Quyền riêng tư ────────────────────────────────────────────────────
+    "4.2TC1a": ["cài đặt Google Account", "Facebook Privacy Settings"],
+    "4.2TC1b": ["cài đặt tài khoản Google / Facebook / Zalo"],
+    "4.2TC1c": ["đọc chính sách quyền riêng tư ứng dụng"],
+    "4.2TC2a": ["Google Privacy Checkup", "Facebook Privacy Settings"],
+    "4.2TC2b": ["cài đặt bảo mật tài khoản 2 lớp (2FA)"],
+    "4.2TC2c": ["chính sách quyền riêng tư các ứng dụng phổ biến"],
+    # ── 4.3 Sức khỏe số ───────────────────────────────────────────────────────
+    "4.3TC1a": ["Digital Wellbeing (Android)", "Screen Time (iOS/Windows)"],
+    "4.3TC1b": ["Screen Time", "ứng dụng giới hạn thời gian màn hình"],
+    "4.3TC1c": ["ứng dụng thiền định", "cộng đồng tích cực trực tuyến"],
+    "4.3TC2a": ["Digital Wellbeing", "ứng dụng theo dõi sức khỏe số"],
+    "4.3TC2b": ["Screen Time", "Parental Control", "Google Family Link"],
+    "4.3TC2c": ["cộng đồng từ thiện số", "diễn đàn tích cực"],
+    # ── 4.4 Môi trường ────────────────────────────────────────────────────────
+    "4.4TC1a": ["website tính lượng carbon số", "thống kê sử dụng thiết bị"],
+    "4.4TC2a": ["website bảo vệ môi trường số", "ứng dụng tái chế thiết bị"],
+    # ── 5.1 Vấn đề kỹ thuật ───────────────────────────────────────────────────
+    "5.1TC1a": ["YouTube hướng dẫn sửa lỗi", "Google tìm kiếm lỗi"],
+    "5.1TC1b": ["YouTube Tutorials", "Microsoft Support", "Google Support"],
+    "5.1TC2a": ["Windows Troubleshooter", "hỗ trợ kỹ thuật online"],
+    "5.1TC2b": ["hỗ trợ kỹ thuật online", "YouTube tutorials"],
+    # ── 5.2 Nhu cầu công nghệ ─────────────────────────────────────────────────
+    "5.2TC1a": ["Google Search", "ChatGPT", "YouTube"],
+    "5.2TC1b": ["Google Play", "App Store", "Google Search"],
+    "5.2TC1c": ["cài đặt Windows", "cài đặt Chrome Extensions"],
+    "5.2TC2a": ["ChatGPT", "Google Search", "Notion"],
+    "5.2TC2b": ["Google Play", "App Store", "ProductHunt.com"],
+    "5.2TC2c": ["cài đặt hệ thống", "Chrome Extensions", "Shortcut keys"],
+    # ── 5.3 Sáng tạo số ───────────────────────────────────────────────────────
+    "5.3TC1a": ["GeoGebra", "PhET Interactive", "Canva", "Scratch"],
+    "5.3TC1b": ["Padlet", "Jamboard", "Miro", "Google Docs (nhóm)"],
+    "5.3TC2a": ["GeoGebra", "Desmos", "PhET", "Scratch", "Canva"],
+    "5.3TC2b": ["Google Docs", "Padlet", "Teams", "Zoom Breakout Rooms"],
+    # ── 5.4 Phát triển NLS ────────────────────────────────────────────────────
+    "5.4TC1a": ["bài kiểm tra NLS online", "Google Forms tự đánh giá"],
+    "5.4TC1b": ["Coursera", "YouTube", "Google Digital Garage"],
+    "5.4TC2a": ["Google Forms (rubric NLS)", "Padlet tự đánh giá"],
+    "5.4TC2b": ["Google Classroom (peer review)", "Padlet"],
+    "5.4TC2c": ["Coursera", "edX", "Udemy", "YouTube Learning"],
+    # ── 6.1 Hiểu AI ───────────────────────────────────────────────────────────
+    "6.1TC1a": ["ChatGPT", "Google Gemini", "Microsoft Copilot"],
+    "6.1TC1b": ["ChatGPT (thực hành)", "Google AI Experiments"],
+    "6.1TC2a": ["ChatGPT", "Gemini", "Claude (giải bài đơn giản)"],
+    "6.1TC2b": ["ChatGPT", "Gemini", "Copilot (thao tác cơ bản)"],
+    # ── 6.2 Sử dụng AI ────────────────────────────────────────────────────────
+    "6.2TC1a": ["ChatGPT", "Google Gemini", "Microsoft Copilot", "Claude"],
+    "6.2TC1b": ["ChatGPT (bài tập thực hành)", "Gemini", "Copilot"],
+    "6.2TC1c": ["ChatGPT (kiểm tra đạo đức AI)", "không chia sẻ dữ liệu cá nhân"],
+    "6.2TC2a": ["ChatGPT Plus", "Gemini Advanced", "API AI"],
+    "6.2TC2b": ["ChatGPT API", "Gemini API", "dự án AI nhỏ"],
+    "6.2TC2c": ["cài đặt quyền riêng tư ChatGPT", "chính sách bảo mật AI"],
+    # ── 6.3 Đánh giá AI ───────────────────────────────────────────────────────
+    "6.3TC1a": ["ChatGPT", "Gemini", "Copilot (thực hành giải thích)"],
+    "6.3TC1b": ["so sánh ChatGPT / Gemini / Copilot", "bảng đặc điểm AI"],
+    "6.3TC2a": ["ChatGPT vs Gemini (so sánh hiệu quả)", "Claude"],
+    "6.3TC2b": ["ChatGPT vs Gemini vs Claude vs Copilot (benchmark)"],
+}

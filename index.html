@@ -1060,18 +1060,37 @@ function _makeCheckItem(item, actName) {
   // Tách mã định danh nếu có (định dạng "CODE – Nội dung")
   const codeMatch = item.text.match(/^([A-Z0-9][A-Z0-9.\-]+[a-z]?)\s*[–\-]\s*(.+)/);
   let displayHtml;
+  // Lấy tools từ item (nếu có)
+  const tools = item.tools || [];
+
   if (codeMatch) {
     const code    = _esc(codeMatch[1]);
     const content = _esc(codeMatch[2]);
-    displayHtml = `<span class="inline-flex items-center gap-1 flex-wrap">
-      <code class="bg-indigo-100 text-indigo-700 font-black text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0">${code}</code>
-      <span class="item-text text-xs text-gray-700 font-semibold outline-none" contenteditable="true">${content}</span>
-    </span>`;
-    div.dataset.code = codeMatch[1];
+    const toolHtml = tools.length
+      ? `<p class="text-xs text-indigo-400 italic mt-0.5 leading-tight">
+           ▶ Công cụ: ${tools.slice(0,3).map(_esc).join(', ')}
+         </p>`
+      : '';
+    displayHtml = `<div class="flex-1 min-w-0">
+      <span class="inline-flex items-center gap-1 flex-wrap">
+        <code class="bg-indigo-100 text-indigo-700 font-black text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0">${code}</code>
+        <span class="item-text text-xs text-gray-700 font-semibold outline-none" contenteditable="true">${content}</span>
+      </span>
+      ${toolHtml}
+    </div>`;
+    div.dataset.code  = codeMatch[1];
+    div.dataset.tools = tools.join('|');
   } else {
-    displayHtml = `<span contenteditable="true"
-      class="item-text flex-1 text-xs text-gray-700 font-semibold outline-none min-w-0
-             focus:border-b focus:border-emerald-400 cursor-text">${_esc(item.text)}</span>`;
+    const toolHtml2 = tools.length
+      ? `<p class="text-xs text-indigo-400 italic mt-0.5"">▶ Công cụ: ${tools.slice(0,3).map(_esc).join(', ')}</p>`
+      : '';
+    displayHtml = `<div class="flex-1 min-w-0">
+      <span contenteditable="true"
+        class="item-text text-xs text-gray-700 font-semibold outline-none min-w-0
+               focus:border-b focus:border-emerald-400 cursor-text">${_esc(item.text)}</span>
+      ${toolHtml2}
+    </div>`;
+    div.dataset.tools = tools.join('|');
   }
 
   div.innerHTML = `

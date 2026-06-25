@@ -25,7 +25,10 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("giaoan")
 
 # Import bảng tra cứu NLS chuẩn (109 mã từ bang-tra-cuu-nls-cua-hs.pdf)
-from nls_database import BANG_TRA_CUU, BANG_TRA_CUU_MAP, KEYWORD_TO_NLS_CODES, CATEGORY_NAMES
+from nls_database import (
+    BANG_TRA_CUU, BANG_TRA_CUU_MAP,
+    KEYWORD_TO_NLS_CODES, CATEGORY_NAMES, CODE_TO_TOOLS,
+)
 
 app = FastAPI(title="Chuẩn Hóa Giáo Án")
 
@@ -1885,10 +1888,12 @@ def _suggest_codes_from_lesson(text_norm: str, max_codes: int = 5) -> list[dict]
     result: list[dict] = []
     for code in top_codes:
         entry = BANG_TRA_CUU_MAP[code]
+        tools = CODE_TO_TOOLS.get(code, [])
         result.append({
             "id":      str(uuid.uuid4())[:8],
             "code":    code,
             "text":    f"{code} – {entry['content']}",
+            "tools":   tools,           # Công cụ số gợi ý cho mã này
             "checked": True,
             "section": entry["section"],
         })
@@ -1982,6 +1987,146 @@ def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str
     }
 
 
+# ── Helpers: chèn NLS vào bảng tiến trình ────────────────────────────────────
+
+def _heading_matches(para_text: str, act_name: str) -> bool:
+    """Kiểm tra đoạn văn có phải heading của hoạt động cần tìm không."""
+    pt = _norm(para_text.strip())
+    an = _norm(act_name.strip())
+    if not pt or not an:
+        return False
+    # Khớp nếu 25 ký tự đầu giống nhau hoặc một bên chứa bên kia
+    return an[:25] in pt or pt[:25] in an or (len(an) > 5 and an in pt)
+
+
+def _is_activity_table(table) -> bool:
+    """Kiểm tra bảng có phải bảng Hoạt động GV/HS không."""
+    if not table.rows:
+        return False
+    row0 = _norm(" ".join(c.text for c in table.rows[0].cells))
+    return any(kw in row0 for kw in
+               ["giao vien", "hoc sinh", "hoat dong", " gv", " hs"])
+
+
+def _add_nls_row_to_table(table, nls_items: list) -> None:
+    """
+    Thêm hàng 'Năng lực số tích hợp' vào cuối bảng hoạt động.
+    Cột 1 (GV): nhãn in đậm nghiêng.
+    Cột 2 (HS): danh sách mã NLS (tối đa 5 mã).
+    """
+    if not nls_items:
+        return
+    try:
+        col_count = len(table.columns)
+        row = table.add_row()
+        cells = row.cells
+
+        # ── Cột 1: Nhãn ─────────────────────────────────────────────────────
+        p0 = cells[0].paragraphs[0]
+        p0.clear()
+        r0 = p0.add_run("Năng lực số tích hợp (NLS):")
+        r0.bold   = True
+        r0.italic = True
+        r0.font.name = "Times New Roman"
+        r0.font.size = Pt(13)
+
+        # ── Cột 2: Mã NLS + Công cụ ─────────────────────────────────────────
+        if col_count >= 2:
+            c1   = cells[1]
+            para = c1.paragraphs[0]
+            para.clear()
+            first = True
+
+            for item in nls_items[:5]:
+                text  = (item.get("text")  or "").strip()
+                tools = item.get("tools") or CODE_TO_TOOLS.get(item.get("code",""), [])
+                if not text:
+                    continue
+
+                p = para if first else c1.add_paragraph()
+                if first:
+                    p.clear()
+                first = False
+
+                # Dòng 1: mã + nội dung năng lực
+                r_nl = p.add_run(text)
+                r_nl.font.name = "Times New Roman"
+                r_nl.font.size = Pt(13)
+
+                # Dòng 2: công cụ gợi ý (in nghiêng, cỡ nhỏ hơn)
+                if tools:
+                    p_tool = c1.add_paragraph()
+                    r_tool = p_tool.add_run(f"  ▶ Công cụ: {', '.join(tools[:3])}")
+                    r_tool.italic    = True
+                    r_tool.font.name = "Times New Roman"
+                    r_tool.font.size = Pt(12)
+
+        # Nếu có > 2 cột → merge cột 2 trở đi
+        if col_count > 2:
+            try:
+                cells[1].merge(cells[col_count - 1])
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.warning(f"_add_nls_row_to_table: {e}")
+
+
+def insert_nls_into_activity_tables(doc: Document, selected_items: list) -> None:
+    """
+    Duyệt body theo thứ tự:
+      paragraph (heading hoạt động) → table kề tiếp → thêm hàng NLS.
+    Chỉ xử lý các item CÓ activity_name.
+    """
+    from collections import defaultdict
+
+    # Nhóm NLS theo tên hoạt động
+    act_nls: dict[str, list] = defaultdict(list)
+    for item in selected_items:
+        act_name = (item.get("activity_name") or "").strip()
+        if act_name:
+            act_nls[act_name].append(item)
+
+    if not act_nls:
+        return
+
+    body             = doc.element.body
+    current_nls      = None
+    current_act_key  = None
+    processed: set   = set()
+
+    for elem in body:
+        # ── Đoạn văn ─────────────────────────────────────────────────────────
+        if elem.tag == f"{{{W_NS}}}p":
+            para_text = "".join(
+                nd.text or "" for nd in elem.iter(f"{{{W_NS}}}t")
+            ).strip()
+            if not para_text:
+                continue
+
+            # Tìm hoạt động khớp
+            matched_key = None
+            for act_name in act_nls:
+                if act_name not in processed and _heading_matches(para_text, act_name):
+                    matched_key = act_name
+                    break
+            if matched_key:
+                current_nls    = act_nls[matched_key]
+                current_act_key = matched_key
+
+        # ── Bảng ─────────────────────────────────────────────────────────────
+        elif elem.tag == f"{{{W_NS}}}tbl" and current_nls:
+            # Tìm Table object tương ứng
+            tbl_obj = next((t for t in doc.tables if t._tbl is elem), None)
+
+            if tbl_obj and _is_activity_table(tbl_obj):
+                _add_nls_row_to_table(tbl_obj, current_nls)
+                if current_act_key:
+                    processed.add(current_act_key)
+                current_nls    = None
+                current_act_key = None
+
+
 def inject_competence_to_docx(
     doc: Document, selected_items: list, mon_label: str, cap_label: str
 ):
@@ -2035,6 +2180,12 @@ def inject_competence_to_docx(
         row = _make_wp(f"+ {text}", indent_twips=360)
         current.addnext(row)
         current = row
+
+    # ── BƯỚC 2: Chèn NLS vào bảng tiến trình từng hoạt động ─────────────────
+    try:
+        insert_nls_into_activity_tables(doc, selected_items)
+    except Exception as e:
+        logger.warning(f"insert_nls_into_activity_tables: {e}")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
