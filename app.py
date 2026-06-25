@@ -684,9 +684,10 @@ def format_math_runs(doc):
             if rFonts is None: rFonts = OxmlElement("w:rFonts"); w_rPr.insert(0, rFonts)
             for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
                 rFonts.set(qn(attr), "Times New Roman")
-            for tag in (qn("w:sz"), qn("w:szCs")):
-                el = w_rPr.find(tag)
-                if el is None: el = OxmlElement(tag); w_rPr.append(el)
+            # Dùng string "w:sz" cho OxmlElement, qn("w:sz") cho find — không nhầm lẫn
+            for tag_str in ("w:sz", "w:szCs"):
+                el = w_rPr.find(qn(tag_str))
+                if el is None: el = OxmlElement(tag_str); w_rPr.append(el)
                 el.set(qn("w:val"), "28")
 
 
