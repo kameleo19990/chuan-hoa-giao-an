@@ -580,9 +580,9 @@ def _apply_font(run, size_pt: float = 14.0):
 
 def _set_spacing(para):
     pf = para.paragraph_format
-    pf.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
-    pf.space_before      = Pt(6)
-    pf.space_after       = Pt(6)
+    pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    pf.space_before      = Pt(3)
+    pf.space_after       = Pt(3)
 
 
 def _center_wp(wp_elem):
@@ -813,7 +813,7 @@ def _make_wp(text: str, bold: bool = False, indent_twips: int = 0) -> object:
     pPr = OxmlElement("w:pPr")
     spc = OxmlElement("w:spacing")
     spc.set(qn("w:before"), "60"); spc.set(qn("w:after"), "60")
-    spc.set(qn("w:line"), "360"); spc.set(qn("w:lineRule"), "auto")  # 1.5 lines
+    spc.set(qn("w:line"), "240"); spc.set(qn("w:lineRule"), "auto")  # Single
     pPr.append(spc)
     if indent_twips:
         ind = OxmlElement("w:ind")
