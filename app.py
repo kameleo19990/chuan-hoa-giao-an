@@ -781,6 +781,7 @@ def fix_mathtype_ole_fallback(doc):
 def process_docx(input_path, output_path):
     # win32com chỉ chạy trên Windows — bỏ qua trên Linux/Render
     doc = Document(input_path)
+    convert_latex_in_doc(doc)       # Bước 0: $...$ → OMML thật (từ Gemini/ChatGPT)
     clean_paragraph_styles(doc)
     set_page_margins(doc)
     fix_math_to_inline(doc)
@@ -887,6 +888,242 @@ def insert_nang_luc_so(doc: Document, competencies: list, mon_label: str, cap_la
     current.addnext(header); current = header
     for item in items:
         current.addnext(item); current = item
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LATEX → OMML CONVERTER  (xử lý $...$ trong file từ AI như Gemini/ChatGPT)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+MML_NS_URI  = "http://www.w3.org/1998/Math/MathML"
+OMML_NS_URI = MATH_NS          # đã định nghĩa ở trên
+
+def _mq(tag: str) -> str: return f"{{{OMML_NS_URI}}}{tag}"
+
+def _omr(text: str):
+    """Tạo m:r (math run) chứa text."""
+    r = etree.Element(_mq("r"))
+    t = etree.SubElement(r, _mq("t"))
+    t.text = text
+    return r
+
+def _mml_tag(elem) -> str:
+    tag = elem.tag
+    return tag.split("}", 1)[1] if isinstance(tag, str) and "}" in tag else tag
+
+def _mml_kids(mml_elem) -> list:
+    result = []
+    for child in mml_elem:
+        result.extend(_mml_to_omml(child))
+    return result
+
+def _mml_to_omml(mml_elem) -> list:
+    """
+    Chuyển đổi đệ quy MathML → OMML.
+    Xử lý các cấu trúc phổ biến trong toán học phổ thông VN.
+    """
+    tag = _mml_tag(mml_elem)
+
+    # ── Containers → xử lý children ─────────────────────────────────────────
+    if tag in ("math", "mrow", "mstyle", "mpadded", "semantics",
+               "annotation-xml", "mphantom"):
+        return _mml_kids(mml_elem)
+
+    # ── Phân số: \frac → m:f ─────────────────────────────────────────────────
+    if tag == "mfrac":
+        ch = list(mml_elem)
+        f   = etree.Element(_mq("f"))
+        num = etree.SubElement(f, _mq("num"))
+        den = etree.SubElement(f, _mq("den"))
+        if ch:     [num.append(c) for c in _mml_to_omml(ch[0])]
+        if len(ch) > 1: [den.append(c) for c in _mml_to_omml(ch[1])]
+        return [f]
+
+    # ── Lũy thừa: x^n → m:sSup ──────────────────────────────────────────────
+    if tag == "msup":
+        ch = list(mml_elem)
+        s   = etree.Element(_mq("sSup"))
+        e   = etree.SubElement(s, _mq("e"))
+        sup = etree.SubElement(s, _mq("sup"))
+        if ch:     [e.append(c)   for c in _mml_to_omml(ch[0])]
+        if len(ch) > 1: [sup.append(c) for c in _mml_to_omml(ch[1])]
+        return [s]
+
+    # ── Chỉ số dưới: x_n → m:sSub ───────────────────────────────────────────
+    if tag == "msub":
+        ch = list(mml_elem)
+        s   = etree.Element(_mq("sSub"))
+        e   = etree.SubElement(s, _mq("e"))
+        sub = etree.SubElement(s, _mq("sub"))
+        if ch:     [e.append(c)   for c in _mml_to_omml(ch[0])]
+        if len(ch) > 1: [sub.append(c) for c in _mml_to_omml(ch[1])]
+        return [s]
+
+    # ── Lũy thừa + chỉ số: x_n^m → m:sSubSup ───────────────────────────────
+    if tag == "msubsup":
+        ch  = list(mml_elem)
+        s   = etree.Element(_mq("sSubSup"))
+        e   = etree.SubElement(s, _mq("e"))
+        sub = etree.SubElement(s, _mq("sub"))
+        sup = etree.SubElement(s, _mq("sup"))
+        if ch:     [e.append(c)   for c in _mml_to_omml(ch[0])]
+        if len(ch) > 1: [sub.append(c) for c in _mml_to_omml(ch[1])]
+        if len(ch) > 2: [sup.append(c) for c in _mml_to_omml(ch[2])]
+        return [s]
+
+    # ── Căn bậc 2: \sqrt → m:rad ─────────────────────────────────────────────
+    if tag == "msqrt":
+        rad  = etree.Element(_mq("rad"))
+        pr   = etree.SubElement(rad, _mq("radPr"))
+        dh   = etree.SubElement(pr,  _mq("degHide")); dh.set(_mq("val"), "1")
+        etree.SubElement(rad, _mq("deg"))             # bậc rỗng
+        e    = etree.SubElement(rad, _mq("e"))
+        [e.append(c) for c in _mml_kids(mml_elem)]
+        return [rad]
+
+    # ── Căn bậc n: \sqrt[n]{x} → m:rad ──────────────────────────────────────
+    if tag == "mroot":
+        ch  = list(mml_elem)
+        rad = etree.Element(_mq("rad"))
+        deg = etree.SubElement(rad, _mq("deg"))
+        e   = etree.SubElement(rad, _mq("e"))
+        if len(ch) > 1: [deg.append(c) for c in _mml_to_omml(ch[1])]  # bậc
+        if ch:          [e.append(c)   for c in _mml_to_omml(ch[0])]  # số bị khai căn
+        return [rad]
+
+    # ── Dấu ngoặc: \left( \right) → m:d ────────────────────────────────────
+    if tag == "mfenced":
+        open_ch  = mml_elem.get("open",  "(")
+        close_ch = mml_elem.get("close", ")")
+        d    = etree.Element(_mq("d"))
+        dPr  = etree.SubElement(d, _mq("dPr"))
+        bc   = etree.SubElement(dPr, _mq("begChr")); bc.set(_mq("val"), open_ch)
+        ec   = etree.SubElement(dPr, _mq("endChr")); ec.set(_mq("val"), close_ch)
+        for child in mml_elem:
+            e = etree.SubElement(d, _mq("e"))
+            [e.append(c) for c in _mml_to_omml(child)]
+        return [d]
+
+    # ── Giới hạn trên: \overset → m:limUpp ──────────────────────────────────
+    if tag == "mover":
+        ch  = list(mml_elem)
+        lim = etree.Element(_mq("limUpp"))
+        e   = etree.SubElement(lim, _mq("e"))
+        lv  = etree.SubElement(lim, _mq("lim"))
+        if ch:     [e.append(c)  for c in _mml_to_omml(ch[0])]
+        if len(ch) > 1: [lv.append(c) for c in _mml_to_omml(ch[1])]
+        return [lim]
+
+    # ── Giới hạn dưới → m:limLow ─────────────────────────────────────────────
+    if tag == "munder":
+        ch  = list(mml_elem)
+        lim = etree.Element(_mq("limLow"))
+        e   = etree.SubElement(lim, _mq("e"))
+        lv  = etree.SubElement(lim, _mq("lim"))
+        if ch:     [e.append(c)  for c in _mml_to_omml(ch[0])]
+        if len(ch) > 1: [lv.append(c) for c in _mml_to_omml(ch[1])]
+        return [lim]
+
+    # ── Text/ký tự/số → m:r ──────────────────────────────────────────────────
+    if tag in ("mi", "mn", "mo", "mtext", "ms"):
+        txt = (mml_elem.text or "").strip()
+        return [_omr(txt)] if txt else []
+
+    # ── Mặc định: xử lý children ─────────────────────────────────────────────
+    return _mml_kids(mml_elem)
+
+
+def _latex_to_omath(latex: str):
+    """
+    Chuyển chuỗi LaTeX thành phần tử m:oMath (OMML).
+    Trả về None nếu chuyển đổi thất bại.
+    """
+    try:
+        from latex2mathml.converter import convert as l2m
+        mathml_str = l2m(latex)
+        mml_elem   = etree.fromstring(mathml_str.encode("utf-8"))
+        omath      = etree.Element(f"{{{MATH_NS}}}oMath")
+        [omath.append(c) for c in _mml_to_omml(mml_elem)]
+        return omath
+    except Exception as e:
+        logger.warning(f"LaTeX→OMML thất bại cho '{latex}': {e}")
+        return None
+
+
+_LATEX_PAT = re.compile(r"\$\$(.+?)\$\$|\$([^$\n]+?)\$", re.DOTALL)
+
+def _process_para_latex(para):
+    """
+    Quét một đoạn văn, thay $...$ / $$...$$ bằng OMML thật.
+    """
+    full_text = "".join(r.text or "" for r in para.runs)
+    if "$" not in full_text:
+        return
+
+    matches = list(_LATEX_PAT.finditer(full_text))
+    if not matches:
+        return
+
+    # Tạo danh sách segments
+    segments: list[tuple[str, str]] = []
+    prev = 0
+    for m in matches:
+        if m.start() > prev:
+            segments.append(("text", full_text[prev:m.start()]))
+        latex = (m.group(1) or m.group(2) or "").strip()
+        if latex:
+            segments.append(("math", latex))
+        prev = m.end()
+    if prev < len(full_text):
+        segments.append(("text", full_text[prev:]))
+
+    # Xóa tất cả w:r khỏi đoạn (giữ w:pPr, bookmarks)
+    p_elem = para._p
+    keep_tags = {qn("w:pPr"), qn("w:bookmarkStart"), qn("w:bookmarkEnd")}
+    for child in list(p_elem):
+        if child.tag not in keep_tags:
+            p_elem.remove(child)
+
+    # Chèn lại nội dung mới
+    for seg_type, content in segments:
+        if seg_type == "text" and content:
+            r    = OxmlElement("w:r")
+            rPr  = OxmlElement("w:rPr")
+            rF   = OxmlElement("w:rFonts")
+            for a in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
+                rF.set(qn(a), "Times New Roman")
+            rPr.append(rF)
+            for tag in ("w:sz", "w:szCs"):
+                el = OxmlElement(tag); el.set(qn("w:val"), "28"); rPr.append(el)
+            r.append(rPr)
+            t = OxmlElement("w:t")
+            t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+            t.text = content
+            r.append(t)
+            p_elem.append(r)
+        elif seg_type == "math" and content:
+            omath = _latex_to_omath(content)
+            if omath is not None:
+                p_elem.append(omath)
+            else:
+                # Fallback: giữ nguyên text
+                r = OxmlElement("w:r"); t = OxmlElement("w:t")
+                t.text = f"${content}$"; r.append(t); p_elem.append(r)
+
+
+def convert_latex_in_doc(doc: Document):
+    """
+    Duyệt toàn bộ tài liệu (thân bài + ô bảng), chuyển $...$ → OMML.
+    """
+    for para in doc.paragraphs:
+        try: _process_para_latex(para)
+        except Exception as e: logger.warning(f"latex para: {e}")
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    try: _process_para_latex(para)
+                    except Exception as e: logger.warning(f"latex cell: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
