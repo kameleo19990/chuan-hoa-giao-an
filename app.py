@@ -29,6 +29,7 @@ from nls_database import (
     BANG_TRA_CUU, BANG_TRA_CUU_MAP,
     KEYWORD_TO_NLS_CODES, CATEGORY_NAMES,
     CODE_TO_TOOLS, ACTIVITY_TYPE_TOOLS,
+    SUBJECT_NLS_PRIORITY,
 )
 
 app = FastAPI(title="Chuẩn Hóa Giáo Án")
@@ -787,10 +788,10 @@ def fix_mathtype_ole_fallback(doc):
             if wp is not None and wp.tag == f"{{{W_NS}}}p": _center_wp(wp)
 
 
-def _auto_insert_nls_in_activities(doc: Document) -> None:
+def _auto_insert_nls_in_activities(doc: Document, mon: str = "") -> None:
     """
     TỰ ĐỘNG phát hiện hoạt động học tập trong giáo án → gợi ý mã NLS
-    phù hợp bối cảnh → chèn thẳng vào bảng tiến trình của từng hoạt động.
+    phù hợp bối cảnh VÀ môn học → chèn vào bảng tiến trình.
     Mỗi hàng NLS thêm vào gồm:  Mã + Nội dung NLS  /  ▶ Công cụ gợi ý
 
     Bỏ qua nếu bảng đã có hàng 'Năng lực số tích hợp' (tránh trùng).
@@ -803,8 +804,11 @@ def _auto_insert_nls_in_activities(doc: Document) -> None:
                     logger.info("Bảng đã có NLS — bỏ qua auto-insert.")
                     return
 
-    # Trích xuất từng hoạt động + gợi ý mã NLS theo nội dung cụ thể
-    act_sections = _extract_activities_with_nls(doc)
+    # Phát hiện môn từ nội dung file (nếu chưa biết)
+    detected_mon = mon or _detect_subject_from_doc(doc)
+
+    # Trích xuất từng hoạt động + gợi ý mã NLS theo nội dung + môn học
+    act_sections = _extract_activities_with_nls(doc, mon=detected_mon)
     if not act_sections:
         logger.info("Không phát hiện hoạt động nào trong giáo án.")
         return
@@ -1833,7 +1837,7 @@ def _match_activity_type(heading: str) -> str:
     return "other"
 
 
-def _extract_activities_with_nls(doc: Document) -> list[dict]:
+def _extract_activities_with_nls(doc: Document, mon: str = "") -> list[dict]:
     """
     Phát hiện từng hoạt động học tập trong giáo án, trích xuất nội dung,
     rồi gợi ý mã NLS phù hợp với BỐI CẢNH CỤ THỂ của mỗi hoạt động.
@@ -1858,7 +1862,7 @@ def _extract_activities_with_nls(doc: Document) -> list[dict]:
         if current_type is None or not current_texts:
             return
         content   = " ".join(current_texts)
-        suggested = _suggest_codes_from_lesson(_norm(content))
+        suggested = _suggest_codes_from_lesson(_norm(content), mon=mon)
         if suggested:
             activities.append({
                 "type":  current_type,
@@ -1899,38 +1903,61 @@ def _extract_activities_with_nls(doc: Document) -> list[dict]:
     return activities
 
 
-def _suggest_codes_from_lesson(text_norm: str, max_codes: int = 5) -> list[dict]:
+def _suggest_codes_from_lesson(
+    text_norm: str,
+    max_codes: int = 5,
+    mon: str = "",
+) -> list[dict]:
     """
-    Gợi ý tối đa max_codes mã NLS từ BANG_TRA_CUU dựa trên từ khóa trong bài dạy.
-    TUYỆT ĐỐI chỉ dùng mã có sẵn trong BANG_TRA_CUU_MAP.
-    Dùng word-boundary để tránh khớp sai (ví dụ 'ai' trong 'lại').
+    Gợi ý tối đa max_codes mã NLS từ BANG_TRA_CUU.
+    - Dựa trên từ khóa trong nội dung hoạt động.
+    - Ưu tiên mã phù hợp với đặc thù môn học (mon).
+    TUYỆT ĐỐI chỉ dùng mã từ BANG_TRA_CUU_MAP.
     """
     import uuid
 
-    seen: set[str] = set()
-    # Danh sách (code, priority) - ưu tiên từ khóa dài/cụ thể hơn
+    # Cấu hình ưu tiên theo môn
+    subj_cfg         = SUBJECT_NLS_PRIORITY.get(mon, {})
+    priority_codes   = set(subj_cfg.get("priority_codes", []))
+    priority_secs    = set(subj_cfg.get("priority_sections", []))
+    kw_boost_map     = subj_cfg.get("keyword_boost", {})
+
+    seen: set[str]           = set()
     scored: list[tuple[int, str]] = []
 
+    # ── Bước 1: Khớp từ khóa chung ───────────────────────────────────────────
     for kw, codes in KEYWORD_TO_NLS_CODES.items():
         kw_norm = _norm(kw)
         kw_len  = len(kw_norm)
 
-        # Word-boundary check: kw phải đứng độc lập (không là phần giữa từ khác)
-        # Dùng regex chỉ cho từ khóa ngắn (≤ 3 ký tự) để tránh false positive
-        if kw_len <= 3:
+        if kw_len <= 3:  # word-boundary check cho từ ngắn
             if not re.search(r'(?<![a-z])' + re.escape(kw_norm) + r'(?![a-z])', text_norm):
                 continue
         else:
             if kw_norm not in text_norm:
                 continue
 
-        priority = kw_len  # từ khóa càng dài → càng cụ thể → ưu tiên cao hơn
+        base = kw_len  # từ khóa dài → ưu tiên cao hơn
         for code in codes:
             if code in BANG_TRA_CUU_MAP and code not in seen:
                 seen.add(code)
-                scored.append((priority, code))
+                # Bonus điểm nếu code phù hợp với môn học
+                subj_bonus = 0
+                if code in priority_codes:
+                    subj_bonus = 60          # Mã nằm trong danh sách ưu tiên môn
+                elif any(code.startswith(s) for s in priority_secs):
+                    subj_bonus = 30          # Mã cùng section ưu tiên
+                scored.append((base + subj_bonus, code))
 
-    # Sắp xếp theo độ ưu tiên giảm dần, lấy max_codes mã đầu
+    # ── Bước 2: Bonus thêm từ keyword_boost của môn ──────────────────────────
+    for kw, codes in kw_boost_map.items():
+        if _norm(kw) in text_norm:
+            for code in codes:
+                if code in BANG_TRA_CUU_MAP and code not in seen:
+                    seen.add(code)
+                    scored.append((120, code))  # Rất ưu tiên — đặc thù môn + nội dung
+
+    # ── Bước 3: Sắp xếp và lấy top ──────────────────────────────────────────
     scored.sort(key=lambda x: -x[0])
     top_codes = [code for _, code in scored[:max_codes]]
 
@@ -1942,11 +1969,48 @@ def _suggest_codes_from_lesson(text_norm: str, max_codes: int = 5) -> list[dict]
             "id":      str(uuid.uuid4())[:8],
             "code":    code,
             "text":    f"{code} – {entry['content']}",
-            "tools":   tools,           # Công cụ số gợi ý cho mã này
+            "tools":   tools,
             "checked": True,
             "section": entry["section"],
         })
     return result
+
+
+def _detect_subject_from_doc(doc: Document) -> str:
+    """
+    Thử phát hiện môn học từ nội dung file (dòng 'MÔN: ...' ở đầu trang).
+    Trả về mã môn tương ứng với SUBJECT_NLS_PRIORITY, hoặc '' nếu không tìm thấy.
+    """
+    MON_DETECT: dict[str, str] = {
+        "toán":                 "toan",
+        "ngữ văn":              "ngu_van",
+        "tiếng anh":            "tieng_anh",
+        "vật lý": "vat_ly",    "vật lí": "vat_ly",
+        "hóa học":              "hoa_hoc",
+        "sinh học":             "sinh_hoc",
+        "khoa học tự nhiên":    "sinh_hoc",
+        "khtn":                 "sinh_hoc",
+        "lịch sử":              "lich_su",
+        "địa lý": "dia_ly",    "địa lí": "dia_ly",
+        "gdcd":                 "gdcd",
+        "tin học":              "tin_hoc",
+        "công nghệ":            "cong_nghe",
+        "tự nhiên và xã hội":   "tnxh",
+        "gdtc":                 "gdtc",
+        "âm nhạc":              "am_nhac",
+        "mỹ thuật":             "my_thuat",
+        "khoa học":             "khoa_hoc",
+    }
+    # Chỉ quét 25 đoạn đầu (phần header/mục tiêu của giáo án)
+    for para in doc.paragraphs[:25]:
+        tl = para.text.strip().lower()
+        if not tl:
+            continue
+        for keyword, mon_code in MON_DETECT.items():
+            if keyword in tl:
+                logger.info(f"Phát hiện môn: '{keyword}' → '{mon_code}'")
+                return mon_code
+    return ""
 
 
 def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str = "") -> dict:
@@ -1954,8 +2018,11 @@ def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str
     Phân tích tài liệu → trả về cấu trúc NLS có thể chọn/sửa.
     Luôn dùng mã từ BANG_TRA_CUU (bang-tra-cuu-nls-cua-hs.pdf).
     Không bao giờ tự bịa mã mới.
+    mon: mã môn học (dùng để ưu tiên mã NLS theo đặc thù môn).
+    cap: cấp học (hiện dùng để log; bảng NLS dùng cùng mã cho mọi cấp).
     """
     import uuid
+    logger.info(f"build_interactive_nls: môn={mon}, cấp={cap}")
 
     # Nếu có framework upload → chỉ chấp nhận mã khớp với BANG_TRA_CUU_MAP
     if framework_text.strip():
@@ -1996,8 +2063,8 @@ def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str
     text_norm  = _norm(extract_doc_text(doc))
     found_kws  = list(find_keywords(text_norm).keys())
 
-    # Trích xuất TỪNG hoạt động + gợi ý mã phù hợp với nội dung riêng
-    act_sections = _extract_activities_with_nls(doc)
+    # Trích xuất TỪNG hoạt động + gợi ý mã phù hợp với nội dung + môn học
+    act_sections = _extract_activities_with_nls(doc, mon=mon)
 
     if act_sections:
         # Chuyển codes → items theo định dạng frontend

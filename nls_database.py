@@ -306,6 +306,194 @@ ACTIVITY_TYPE_TOOLS: dict[str, list[str]] = {
     ],
 }
 
+# ============================================================
+# ƯU TIÊN MÃ NLS THEO MÔN HỌC
+# Khi gợi ý, các mã trong priority_codes được cộng điểm cao hơn
+# keyword_boost: từ khóa hoạt động đặc thù của môn → mã ưu tiên
+# ============================================================
+SUBJECT_NLS_PRIORITY: dict[str, dict] = {
+    # ── Khoa học tự nhiên (KHTN / Sinh học tiểu học) ──────────────────────────
+    "khoa_hoc": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "5.3TC1a", "5.1TC1a", "1.3TC1a"],
+        "priority_sections": ["1.1", "1.2", "5.1", "5.3"],
+        "keyword_boost": {
+            "thí nghiệm":        ["1.1TC1b", "5.3TC1a", "5.1TC1a"],
+            "quan sát":          ["1.1TC1a", "1.1TC1c"],
+            "thu thập số liệu":  ["1.3TC1a", "1.3TC2a"],
+            "phân tích":         ["1.2TC1a", "1.2TC2a"],
+            "mô phỏng":          ["5.3TC1a", "5.3TC2a"],
+        },
+    },
+    # ── Toán ──────────────────────────────────────────────────────────────────
+    "toan": {
+        "priority_codes":    ["5.3TC1a", "5.2TC1b", "1.3TC1a", "5.2TC2b", "1.1TC1b"],
+        "priority_sections": ["1.3", "5.2", "5.3"],
+        "keyword_boost": {
+            "tính toán":         ["5.3TC1a", "5.2TC1b"],
+            "vẽ đồ thị":         ["3.1TC1a", "5.3TC1a"],
+            "giải bài tập":      ["5.3TC1a", "5.2TC1b"],
+            "lập bảng":          ["1.3TC1a", "1.3TC2a"],
+            "xử lý số liệu":     ["1.3TC1a", "1.2TC1b"],
+        },
+    },
+    # ── Ngữ văn ───────────────────────────────────────────────────────────────
+    "ngu_van": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "3.1TC1a", "3.1TC1b", "2.2TC1c"],
+        "priority_sections": ["1.1", "1.2", "2.2", "3.1"],
+        "keyword_boost": {
+            "đọc văn bản":       ["1.1TC1a", "1.2TC1b"],
+            "viết bài":          ["3.1TC1a", "3.1TC1b"],
+            "tìm kiếm tư liệu":  ["1.1TC1b", "1.2TC1a"],
+            "trình bày":         ["3.1TC1b", "2.2TC2a"],
+            "ghi nguồn":         ["2.2TC1c", "3.3TC1a"],
+        },
+    },
+    # ── Tiếng Anh ─────────────────────────────────────────────────────────────
+    "tieng_anh": {
+        "priority_codes":    ["2.1TC1a", "2.5TC1b", "3.1TC1b", "1.1TC1b", "2.2TC2a"],
+        "priority_sections": ["2.1", "2.2", "3.1"],
+        "keyword_boost": {
+            "giao tiếp":         ["2.1TC1a", "2.1TC1b", "2.5TC1b"],
+            "viết":              ["3.1TC1a", "3.1TC1b"],
+            "tìm kiếm":          ["1.1TC1b", "1.1TC2b"],
+            "chia sẻ":           ["2.2TC2a", "3.1TC1b"],
+            "nghe nói":          ["2.1TC1a", "2.5TC1b"],
+        },
+    },
+    # ── Vật lý ────────────────────────────────────────────────────────────────
+    "vat_ly": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "5.3TC1a", "1.3TC1a", "5.1TC1a"],
+        "priority_sections": ["1.1", "1.2", "1.3", "5.1", "5.3"],
+        "keyword_boost": {
+            "thí nghiệm":        ["1.1TC1b", "5.3TC1a", "5.1TC1a"],
+            "đo lường":          ["1.3TC1a", "1.3TC2a"],
+            "mô phỏng":          ["5.3TC1a", "5.3TC2a"],
+            "phân tích số liệu": ["1.2TC1a", "1.3TC2a"],
+            "vẽ đồ thị":         ["3.1TC1a", "1.3TC2a"],
+        },
+    },
+    # ── Hóa học ───────────────────────────────────────────────────────────────
+    "hoa_hoc": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "5.3TC1a", "5.1TC1a", "4.1TC1a"],
+        "priority_sections": ["1.1", "1.2", "4.1", "5.1", "5.3"],
+        "keyword_boost": {
+            "thí nghiệm":        ["1.1TC1b", "5.3TC1a", "4.1TC1a"],
+            "an toàn hóa chất":  ["4.1TC1a", "4.1TC1b", "4.1TC1c"],
+            "phân tích":         ["1.2TC1a", "1.2TC1b"],
+            "mô phỏng phản ứng": ["5.3TC1a", "5.3TC2a"],
+        },
+    },
+    # ── Sinh học ──────────────────────────────────────────────────────────────
+    "sinh_hoc": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "5.3TC1a", "1.3TC1a", "1.2TC1b"],
+        "priority_sections": ["1.1", "1.2", "1.3", "5.3"],
+        "keyword_boost": {
+            "quan sát":          ["1.1TC1a", "1.1TC1c"],
+            "thí nghiệm":        ["1.1TC1b", "5.3TC1a"],
+            "phân tích":         ["1.2TC1a", "1.2TC1b"],
+            "tra cứu":           ["1.1TC1b", "1.2TC1a"],
+            "thu thập số liệu":  ["1.3TC1a", "1.3TC2a"],
+        },
+    },
+    # ── Lịch sử ───────────────────────────────────────────────────────────────
+    "lich_su": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "1.2TC1b", "3.1TC1a", "2.2TC1c"],
+        "priority_sections": ["1.1", "1.2", "2.2", "3.1"],
+        "keyword_boost": {
+            "tư liệu lịch sử":   ["1.1TC1b", "1.2TC1a"],
+            "đánh giá nguồn":    ["1.2TC1a", "1.2TC2a"],
+            "trình bày":         ["3.1TC1b", "2.2TC2a"],
+            "ghi nguồn":         ["2.2TC1c", "3.3TC1a"],
+        },
+    },
+    # ── Địa lý ────────────────────────────────────────────────────────────────
+    "dia_ly": {
+        "priority_codes":    ["1.1TC1b", "1.2TC1a", "1.3TC1a", "5.2TC1b", "1.1TC2b"],
+        "priority_sections": ["1.1", "1.2", "1.3", "5.2"],
+        "keyword_boost": {
+            "bản đồ":            ["1.1TC1b", "5.2TC1b"],
+            "thu thập số liệu":  ["1.3TC1a", "1.3TC2a"],
+            "phân tích":         ["1.2TC1a", "1.2TC1b"],
+            "vẽ biểu đồ":        ["3.1TC1a", "1.3TC2a"],
+        },
+    },
+    # ── GDCD ──────────────────────────────────────────────────────────────────
+    "gdcd": {
+        "priority_codes":    ["2.3TC1a", "2.5TC1a", "4.2TC1a", "2.3TC2a", "4.1TC1b"],
+        "priority_sections": ["2.3", "2.5", "4.1", "4.2"],
+        "keyword_boost": {
+            "công dân số":       ["2.3TC1a", "2.3TC2a"],
+            "an toàn mạng":      ["4.1TC1b", "4.2TC1a"],
+            "ứng xử":            ["2.5TC1a", "2.5TC2a"],
+            "quyền riêng tư":    ["4.2TC1a", "4.2TC2a"],
+            "danh tính":         ["2.6TC1a", "2.6TC2a"],
+        },
+    },
+    # ── Tin học ───────────────────────────────────────────────────────────────
+    "tin_hoc": {
+        "priority_codes":    ["3.4TC1a", "5.1TC1a", "6.1TC1a", "6.2TC1a", "5.3TC1a"],
+        "priority_sections": ["3.4", "5.1", "5.2", "6.1", "6.2"],
+        "keyword_boost": {
+            "lập trình":         ["3.4TC1a", "3.4TC2a"],
+            "sửa lỗi":           ["5.1TC1a", "5.1TC1b"],
+            "ai":                ["6.1TC1a", "6.2TC1a"],
+            "thuật toán":        ["3.4TC1a", "5.3TC1a"],
+            "phần mềm":          ["5.2TC1b", "5.1TC1a"],
+        },
+    },
+    # ── Công nghệ ─────────────────────────────────────────────────────────────
+    "cong_nghe": {
+        "priority_codes":    ["3.1TC1a", "5.3TC1a", "5.1TC1a", "5.2TC1b", "3.4TC1a"],
+        "priority_sections": ["3.1", "5.1", "5.2", "5.3"],
+        "keyword_boost": {
+            "thiết kế":          ["3.1TC1a", "5.3TC1a"],
+            "sáng tạo sản phẩm": ["3.1TC1a", "5.3TC2a"],
+            "giải quyết vấn đề": ["5.1TC1a", "5.2TC1b"],
+            "lập trình":         ["3.4TC1a", "5.3TC1a"],
+        },
+    },
+    # ── Tự nhiên & Xã hội (TH) ────────────────────────────────────────────────
+    "tnxh": {
+        "priority_codes":    ["1.1TC1a", "4.3TC1a", "2.3TC1a", "1.2TC1a"],
+        "priority_sections": ["1.1", "2.3", "4.3"],
+        "keyword_boost": {
+            "quan sát":          ["1.1TC1a", "1.1TC1c"],
+            "tìm hiểu":          ["1.1TC1a", "1.1TC1b"],
+            "an toàn":           ["4.3TC1a", "4.3TC1b"],
+        },
+    },
+    # ── GDTC ──────────────────────────────────────────────────────────────────
+    "gdtc": {
+        "priority_codes":    ["4.3TC1a", "4.3TC2a", "1.1TC1b", "1.3TC1a"],
+        "priority_sections": ["4.3", "1.1"],
+        "keyword_boost": {
+            "sức khỏe":          ["4.3TC1a", "4.3TC2a"],
+            "theo dõi thể lực":  ["4.3TC1b", "1.3TC1a"],
+            "dinh dưỡng":        ["4.3TC1a", "1.2TC1a"],
+        },
+    },
+    # ── Âm nhạc ───────────────────────────────────────────────────────────────
+    "am_nhac": {
+        "priority_codes":    ["3.1TC1a", "3.1TC2a", "3.3TC1a", "3.2TC1a"],
+        "priority_sections": ["3.1", "3.2", "3.3"],
+        "keyword_boost": {
+            "sáng tác":          ["3.1TC1a", "3.1TC2a"],
+            "bản quyền":         ["3.3TC1a", "3.3TC2a"],
+            "chia sẻ":           ["2.2TC2a", "3.1TC1b"],
+        },
+    },
+    # ── Mỹ thuật ──────────────────────────────────────────────────────────────
+    "my_thuat": {
+        "priority_codes":    ["3.1TC1a", "3.1TC2a", "3.3TC1a", "3.2TC1a"],
+        "priority_sections": ["3.1", "3.2", "3.3"],
+        "keyword_boost": {
+            "tạo nội dung số":   ["3.1TC1a", "3.1TC2a"],
+            "sáng tạo":          ["3.1TC1a", "3.2TC1a"],
+            "bản quyền":         ["3.3TC1a", "3.3TC2a"],
+        },
+    },
+}
+
 CODE_TO_TOOLS: dict[str, list[str]] = {
     # ── 1.1 Tìm kiếm ──────────────────────────────────────────────────────────
     "1.1TC1a": ["Google Search", "ChatGPT", "thư viện số trường"],
