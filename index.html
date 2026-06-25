@@ -8,8 +8,22 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Supabase JS phục vụ từ server nội bộ (tránh bị trình duyệt chặn CDN) -->
-  <script src="/static/supabase.min.js"></script>
+  <!-- Supabase JS: ưu tiên file local, fallback về CDN nếu thiếu -->
+  <script>
+    function loadSupabase(callback) {
+      var s = document.createElement('script');
+      s.src = '/static/supabase.min.js';
+      s.onload = callback;
+      s.onerror = function() {
+        // Fallback: dùng CDN nếu file local không có
+        var s2 = document.createElement('script');
+        s2.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+        s2.onload = callback;
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s);
+    }
+  </script>
 
   <script>
     tailwind.config = {
@@ -678,8 +692,8 @@ async function triggerDownload(response){
   setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
 
-// Khởi động
-initApp();
+// Khởi động — chờ Supabase JS load xong mới chạy
+loadSupabase(function() { initApp(); });
 </script>
 </body>
 </html>
