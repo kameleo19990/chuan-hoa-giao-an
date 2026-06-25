@@ -27,7 +27,8 @@ logger = logging.getLogger("giaoan")
 # Import bảng tra cứu NLS chuẩn (109 mã từ bang-tra-cuu-nls-cua-hs.pdf)
 from nls_database import (
     BANG_TRA_CUU, BANG_TRA_CUU_MAP,
-    KEYWORD_TO_NLS_CODES, CATEGORY_NAMES, CODE_TO_TOOLS,
+    KEYWORD_TO_NLS_CODES, CATEGORY_NAMES,
+    CODE_TO_TOOLS, ACTIVITY_TYPE_TOOLS,
 )
 
 app = FastAPI(title="Chuẩn Hóa Giáo Án")
@@ -814,6 +815,7 @@ def _auto_insert_nls_in_activities(doc: Document) -> None:
         for code_item in act.get("codes", []):
             selected_items.append({
                 "activity_name": act["name"],
+                "activity_type": act.get("type", "other"),  # quan trọng: loại HĐ
                 "text":          code_item.get("text",  ""),
                 "code":          code_item.get("code",  ""),
                 "tools":         code_item.get("tools", []),
@@ -2077,33 +2079,42 @@ def _add_nls_row_to_table(table, nls_items: list) -> None:
         r0.font.name = "Times New Roman"
         r0.font.size = Pt(13)
 
-        # ── Cột 2: Mã NLS + Công cụ ─────────────────────────────────────────
+        # ── Cột 2: Mã NLS + Công cụ kết hợp ────────────────────────────────
         if col_count >= 2:
-            c1   = cells[1]
-            para = c1.paragraphs[0]
+            c1    = cells[1]
+            para  = c1.paragraphs[0]
             para.clear()
             first = True
 
+            # Lấy loại hoạt động từ item đầu tiên → tra bảng công cụ theo loại HĐ
+            act_type       = (nls_items[0].get("activity_type") or "other") if nls_items else "other"
+            act_type_tools = ACTIVITY_TYPE_TOOLS.get(act_type, ACTIVITY_TYPE_TOOLS["other"])
+
             for item in nls_items[:5]:
-                text  = (item.get("text")  or "").strip()
-                tools = item.get("tools") or CODE_TO_TOOLS.get(item.get("code",""), [])
+                text     = (item.get("text") or "").strip()
+                code     = (item.get("code") or "").strip()
                 if not text:
                     continue
+
+                # Công cụ: kết hợp (1) từ mã NLS + (2) từ loại HĐ, bỏ trùng
+                code_tools = item.get("tools") or CODE_TO_TOOLS.get(code, [])
+                extra      = [t for t in act_type_tools if t not in code_tools]
+                all_tools  = code_tools + extra[:2]   # tối đa = 3 từ mã + 2 từ loại HĐ
 
                 p = para if first else c1.add_paragraph()
                 if first:
                     p.clear()
                 first = False
 
-                # Dòng 1: mã + nội dung năng lực
+                # Dòng 1: mã + nội dung năng lực (Times 13)
                 r_nl = p.add_run(text)
                 r_nl.font.name = "Times New Roman"
                 r_nl.font.size = Pt(13)
 
-                # Dòng 2: công cụ gợi ý (in nghiêng, cỡ nhỏ hơn)
-                if tools:
+                # Dòng 2: công cụ gợi ý cụ thể (in nghiêng, Times 12)
+                if all_tools:
                     p_tool = c1.add_paragraph()
-                    r_tool = p_tool.add_run(f"  ▶ Công cụ: {', '.join(tools[:3])}")
+                    r_tool = p_tool.add_run(f"  ▶ Công cụ thực hiện: {'; '.join(all_tools[:4])}")
                     r_tool.italic    = True
                     r_tool.font.name = "Times New Roman"
                     r_tool.font.size = Pt(12)

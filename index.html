@@ -1068,7 +1068,7 @@ function _makeCheckItem(item, actName) {
     const content = _esc(codeMatch[2]);
     const toolHtml = tools.length
       ? `<p class="text-xs text-indigo-400 italic mt-0.5 leading-tight">
-           ▶ Công cụ: ${tools.slice(0,3).map(_esc).join(', ')}
+           ▶ Công cụ thực hiện: ${tools.slice(0,4).map(_esc).join('; ')}
          </p>`
       : '';
     displayHtml = `<div class="flex-1 min-w-0">

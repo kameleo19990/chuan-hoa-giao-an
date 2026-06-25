@@ -258,6 +258,54 @@ CATEGORY_NAMES = {
 # CÔNG CỤ SỐ TƯƠNG ỨNG TỪNG MÃ NLS
 # Chỉ gợi ý — GV/HS có thể thay bằng công cụ khác phù hợp bối cảnh
 # ============================================================
+# ============================================================
+# CÔNG CỤ GỢI Ý THEO LOẠI HOẠT ĐỘNG HỌC TẬP
+# Kết hợp với CODE_TO_TOOLS → gợi ý cụ thể hơn theo bối cảnh
+# ============================================================
+ACTIVITY_TYPE_TOOLS: dict[str, list[str]] = {
+    "khoi_dong": [
+        "Kahoot (trò chơi khởi động tương tác)",
+        "Quizlet Live (ôn tập kiến thức cũ)",
+        "Mentimeter (khảo sát ý kiến nhanh)",
+        "Quizizz (kiểm tra nhanh 5 phút)",
+        "YouTube (video kích thích tư duy, đặt vấn đề)",
+    ],
+    "hinh_thanh": [
+        "PhET Interactive Simulations (mô phỏng thí nghiệm ảo)",
+        "GeoGebra (khám phá toán học / khoa học trực quan)",
+        "YouTube Education (video giải thích khái niệm)",
+        "Padlet (ghi chú và chia sẻ kiến thức nhóm)",
+        "Google Scholar (tra cứu tài liệu học thuật)",
+    ],
+    "luyen_tap": [
+        "Quizlet (luyện tập flashcard / trắc nghiệm)",
+        "Quizizz (bài tập tương tác có giải thích)",
+        "Google Forms (bài tập nộp bài online)",
+        "Khan Academy (luyện tập có gợi ý từng bước)",
+        "GeoGebra / Desmos (thực hành toán trực tuyến)",
+    ],
+    "van_dung": [
+        "Canva (tạo poster, infographic, slide trình bày)",
+        "Google Slides / PowerPoint (thuyết trình nhóm)",
+        "CapCut / DaVinci Resolve (tạo video báo cáo)",
+        "Padlet (triển lãm sản phẩm số của HS)",
+        "Google Sites / Wix (tạo trang web dự án)",
+    ],
+    "danh_gia": [
+        "Google Forms (kiểm tra đánh giá có chấm tự động)",
+        "Quizizz (đánh giá nhanh cuối hoạt động)",
+        "Kahoot (đánh giá tương tác vui)",
+        "Mentimeter (thu thập phản hồi HS theo thời gian thực)",
+        "Rubric số Google Docs (HS tự đánh giá lẫn nhau)",
+    ],
+    "other": [
+        "Google Docs (soạn thảo và chia sẻ)",
+        "Padlet (chia sẻ ý tưởng nhóm)",
+        "Google Classroom (giao và nộp bài tập)",
+        "Zalo nhóm (thông báo và trao đổi nhanh)",
+    ],
+}
+
 CODE_TO_TOOLS: dict[str, list[str]] = {
     # ── 1.1 Tìm kiếm ──────────────────────────────────────────────────────────
     "1.1TC1a": ["Google Search", "ChatGPT", "thư viện số trường"],
