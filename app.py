@@ -42,8 +42,8 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_JWT_SECRET  = os.getenv("SUPABASE_JWT_SECRET", "")
 FREE_QUOTA           = int(os.getenv("FREE_QUOTA", "5"))
 
-# AUTH_ENABLED = False khi chưa cấu hình .env → app vẫn chạy được ở local
-AUTH_ENABLED: bool = bool(SUPABASE_JWT_SECRET)
+# AUTH_ENABLED = True khi có Supabase URL + anon key (không cần JWT_SECRET nữa)
+AUTH_ENABLED: bool = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 
 _supa: SupabaseClient | None = None
 
@@ -64,8 +64,10 @@ async def get_current_user(
     creds: HTTPAuthorizationCredentials = Security(_bearer),
 ) -> dict:
     """
-    Xác thực JWT do Supabase cấp.
-    Khi AUTH_ENABLED = False (chưa cấu hình .env), trả về user ảo cho dev.
+    Xác thực token do Supabase cấp.
+    Ưu tiên dùng Supabase API (get_user) — không phụ thuộc JWT_SECRET.
+    Fallback về jose_jwt nếu Supabase client chưa sẵn sàng.
+    Khi AUTH_ENABLED = False → trả về user ảo cho dev local.
     """
     if not AUTH_ENABLED:
         return {"sub": "dev-local", "email": "dev@local.vn", "role": "authenticated"}
@@ -75,19 +77,39 @@ async def get_current_user(
             status_code=401,
             detail="Vui lòng đăng nhập để sử dụng tính năng này.",
         )
-    try:
-        payload = jose_jwt.decode(
-            creds.credentials,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-        return payload
-    except JWTError:
-        raise HTTPException(
-            status_code=401,
-            detail="Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.",
-        )
+
+    token = creds.credentials
+
+    # Phương án 1: Verify qua Supabase API (đáng tin cậy nhất)
+    supa = _get_supa()
+    if supa:
+        try:
+            resp = supa.auth.get_user(token)
+            if resp and resp.user:
+                return {
+                    "sub":   resp.user.id,
+                    "email": resp.user.email or "",
+                }
+        except Exception as e:
+            logger.warning(f"get_user failed: {e}")
+
+    # Phương án 2: Verify bằng JWT_SECRET (fallback)
+    if SUPABASE_JWT_SECRET:
+        try:
+            payload = jose_jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+            return payload
+        except JWTError as e:
+            logger.warning(f"JWT decode failed: {e}")
+
+    raise HTTPException(
+        status_code=401,
+        detail="Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.",
+    )
 
 
 # ── Quota: kiểm tra + tăng trong một lần gọi duy nhất ───────────────────────
@@ -1321,5 +1343,6 @@ async def insert_nls_smart(
 
 
 if __name__ == "__main__":
+    # Local development only — production dùng gunicorn (xem Procfile)
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
