@@ -823,9 +823,93 @@ const COLOR_MAP = {
   gray:    { bg:'bg-gray-50',    border:'border-gray-200',   head:'text-gray-700'   },
 };
 
+// ── Kho mã định danh từ framework ─────────────────────────────────────────────
+let frameworkCodes = [];   // [{code, content, full_text}]
+
+function _storeFrameworkCodes(data) {
+  frameworkCodes = [];
+  if (data.has_codes && data.codes_list?.length) {
+    frameworkCodes = data.codes_list;
+  }
+}
+
+// ── Code Picker — dropdown chọn mã định danh ──────────────────────────────────
+let _pickerCb = null;
+
+function _showCodePicker(anchorEl, onSelect) {
+  document.getElementById('nls-code-picker')?.remove();
+  if (!frameworkCodes.length) { onSelect(null); return; }
+
+  _pickerCb = onSelect;
+  const picker = document.createElement('div');
+  picker.id = 'nls-code-picker';
+  picker.className = 'fixed z-50 bg-white border border-indigo-200 rounded-2xl shadow-2xl p-2 w-72 max-h-64 overflow-y-auto animate-fadein';
+
+  picker.innerHTML = `
+    <p class="text-xs font-black text-indigo-600 mb-1.5 px-1">🔖 Chọn mã từ khung NLS:</p>
+    <input id="cp-search" type="text" placeholder="🔍 Tìm mã hoặc nội dung..."
+      class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-2">
+    <div id="cp-list" class="space-y-0.5"></div>
+    <div class="border-t border-gray-100 mt-1.5 pt-1.5">
+      <button id="cp-custom" class="w-full text-left text-xs text-gray-400 hover:text-indigo-600 font-bold py-1 px-2 rounded-lg hover:bg-indigo-50 transition">
+        ✏️ Nhập mã tùy chỉnh...
+      </button>
+    </div>`;
+
+  const rect = anchorEl.getBoundingClientRect();
+  picker.style.cssText = `top:${rect.bottom + 4}px; left:${Math.min(rect.left, window.innerWidth - 296)}px;`;
+  document.body.appendChild(picker);
+
+  function renderList(q) {
+    const hits = q
+      ? frameworkCodes.filter(c => c.code.toLowerCase().includes(q) || c.content.toLowerCase().includes(q))
+      : frameworkCodes;
+    document.getElementById('cp-list').innerHTML = hits.map((c, i) => `
+      <button data-idx="${i}" class="cp-row w-full text-left flex items-start gap-2 hover:bg-indigo-50 rounded-xl px-2 py-1.5 transition">
+        <code class="bg-indigo-100 text-indigo-700 font-black text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0 mt-0.5">${c.code}</code>
+        <span class="text-xs text-gray-600 font-semibold leading-snug">${c.content.substring(0,65)}${c.content.length>65?'…':''}</span>
+      </button>`).join('');
+    document.querySelectorAll('.cp-row').forEach(btn =>
+      btn.addEventListener('click', () => { _pickerCb?.(frameworkCodes[+btn.dataset.idx]); picker.remove(); })
+    );
+  }
+
+  renderList('');
+  document.getElementById('cp-search').addEventListener('input', e => renderList(e.target.value.toLowerCase().trim()));
+  document.getElementById('cp-search').focus();
+  document.getElementById('cp-custom').addEventListener('click', () => { _pickerCb?.(null); picker.remove(); });
+  setTimeout(() => {
+    document.addEventListener('click', function close(e) {
+      if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); }
+    });
+  }, 150);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function _renderChecklist(data) {
+  _storeFrameworkCodes(data);
   const container = document.getElementById('nls-checklist');
   container.innerHTML = '';
+
+  // Badge thông báo nguồn dữ liệu
+  const badge = document.getElementById('nls-source-badge') || (() => {
+    const b = document.createElement('div'); b.id = 'nls-source-badge';
+    container.parentElement.insertBefore(b, container);
+    return b;
+  })();
+  if (data.source === 'framework_coded') {
+    badge.innerHTML = `<div class="mb-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
+      <span class="text-indigo-500 font-black text-xs">🔖 Dùng mã định danh từ khung NLS của Thầy/Cô</span>
+    </div>`;
+  } else if (data.source === 'framework') {
+    badge.innerHTML = `<div class="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+      <span class="text-amber-600 font-black text-xs">📋 Dùng nội dung từ khung NLS đã upload (không tìm thấy mã định danh)</span>
+    </div>`;
+  } else {
+    badge.innerHTML = `<div class="mb-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+      <span class="text-emerald-600 font-black text-xs">📚 Gợi ý từ cơ sở dữ liệu GDPT 2018</span>
+    </div>`;
+  }
 
   // Keywords
   if (data.keywords?.length) {
@@ -866,8 +950,10 @@ function _makeActivitySection(type, name, items) {
   hdr.className = 'flex items-center justify-between mb-2';
   hdr.innerHTML = `
     <p class="${cl.head} font-black text-xs">${cfg.icon} ${name}</p>
-    <button onclick="addCustomItem(this.closest('.activity-section'))"
-      class="text-xs ${cl.head} opacity-60 hover:opacity-100 font-bold transition">+ Thêm</button>`;
+    <button onclick="addCustomItem(this.closest('.activity-section'), this)"
+      class="text-xs ${cl.head} opacity-60 hover:opacity-100 font-bold transition flex items-center gap-1">
+      ${frameworkCodes.length ? '🔖' : '+'} Thêm${frameworkCodes.length ? ' mã' : ''}
+    </button>`;
   sec.appendChild(hdr);
 
   // Items
@@ -882,12 +968,28 @@ function _makeCheckItem(item, actName) {
   const div = document.createElement('div');
   div.className = 'nls-item group flex items-start gap-2 bg-white border border-gray-100 rounded-xl px-2.5 py-1.5';
   div.dataset.activityName = actName;
+
+  // Tách mã định danh nếu có (định dạng "CODE – Nội dung")
+  const codeMatch = item.text.match(/^([A-Z0-9][A-Z0-9.\-]+[a-z]?)\s*[–\-]\s*(.+)/);
+  let displayHtml;
+  if (codeMatch) {
+    const code    = _esc(codeMatch[1]);
+    const content = _esc(codeMatch[2]);
+    displayHtml = `<span class="inline-flex items-center gap-1 flex-wrap">
+      <code class="bg-indigo-100 text-indigo-700 font-black text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0">${code}</code>
+      <span class="item-text text-xs text-gray-700 font-semibold outline-none" contenteditable="true">${content}</span>
+    </span>`;
+    div.dataset.code = codeMatch[1];
+  } else {
+    displayHtml = `<span contenteditable="true"
+      class="item-text flex-1 text-xs text-gray-700 font-semibold outline-none min-w-0
+             focus:border-b focus:border-emerald-400 cursor-text">${_esc(item.text)}</span>`;
+  }
+
   div.innerHTML = `
     <input type="checkbox" ${item.checked !== false ? 'checked' : ''}
       class="nls-cb mt-0.5 flex-shrink-0 w-3.5 h-3.5 accent-emerald-500 cursor-pointer">
-    <span contenteditable="true"
-      class="item-text flex-1 text-xs text-gray-700 font-semibold outline-none min-w-0
-             focus:border-b focus:border-emerald-400 cursor-text">${_esc(item.text)}</span>
+    <div class="flex-1 min-w-0">${displayHtml}</div>
     <button onclick="this.closest('.nls-item').remove();_updatePreview()"
       class="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition flex-shrink-0 mt-0.5">
       <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -895,19 +997,57 @@ function _makeCheckItem(item, actName) {
       </svg>
     </button>`;
   div.querySelector('.nls-cb').addEventListener('change', _updatePreview);
-  div.querySelector('.item-text').addEventListener('input', _updatePreview);
+  div.querySelector('.item-text')?.addEventListener('input', _updatePreview);
+
+  // Cho phép click vào [CODE] để đổi mã (nếu có framework)
+  const codeTag = div.querySelector('code');
+  if (codeTag && frameworkCodes.length > 0) {
+    codeTag.title = 'Bấm để đổi mã';
+    codeTag.classList.add('cursor-pointer', 'hover:bg-indigo-200', 'hover:ring-2', 'hover:ring-indigo-400');
+    codeTag.addEventListener('click', e => {
+      e.stopPropagation();
+      _showCodePicker(codeTag, sel => {
+        if (sel) {
+          codeTag.textContent = sel.code;
+          div.dataset.code = sel.code;
+          const span = div.querySelector('.item-text');
+          if (span) span.textContent = sel.content;
+          _updatePreview();
+        }
+      });
+    });
+  }
+
   return div;
 }
 
-function addCustomItem(section) {
-  const wrap = section.querySelector('.space-y-1.5') || section;
+function addCustomItem(section, anchorEl) {
+  const wrap    = section.querySelector('.space-y-1.5') || section;
   const actName = section.dataset.activityName || '';
-  wrap.appendChild(_makeCheckItem({ text:'Nhập nội dung năng lực số...', checked:true }, actName));
-  _updatePreview();
-  // Focus vào ô vừa thêm
-  const newSpan = wrap.lastChild.querySelector('.item-text');
-  newSpan?.focus();
-  document.execCommand('selectAll', false, null);
+  const anchor  = anchorEl instanceof Element ? anchorEl : section;
+
+  if (frameworkCodes.length > 0) {
+    // Có mã framework → hiện picker
+    _showCodePicker(anchor, (selected) => {
+      const item = selected
+        ? { code: selected.code, text: selected.full_text, checked: true }
+        : { text: 'Nhập nội dung năng lực số...', checked: true };
+      const el = _makeCheckItem(item, actName);
+      wrap.appendChild(el);
+      if (!selected) {
+        el.querySelector('.item-text')?.focus();
+        document.execCommand('selectAll', false, null);
+      }
+      _updatePreview();
+    });
+  } else {
+    // Không có framework → thêm ô trống
+    const el = _makeCheckItem({ text:'Nhập nội dung năng lực số...', checked:true }, actName);
+    wrap.appendChild(el);
+    el.querySelector('.item-text')?.focus();
+    document.execCommand('selectAll', false, null);
+    _updatePreview();
+  }
 }
 
 function addCustomItemGlobal() {
@@ -941,8 +1081,11 @@ function _updatePreview() {
     const texts = [];
     sec.querySelectorAll('.nls-item').forEach(item => {
       if (item.querySelector('.nls-cb')?.checked) {
-        const t = (item.querySelector('.item-text')?.textContent || '').trim();
-        if (t && t !== 'Nhập nội dung năng lực số...') texts.push(t);
+        const code    = item.dataset.code || '';
+        const content = (item.querySelector('.item-text')?.textContent || '').trim();
+        if (content && content !== 'Nhập nội dung năng lực số...') {
+          texts.push(code ? `${code} – ${content}` : content);
+        }
       }
     });
     if (texts.length) groups.set(actName, texts);
@@ -974,9 +1117,11 @@ async function confirmAndCreateNLS() {
     const actName = sec.dataset.activityName || '';
     sec.querySelectorAll('.nls-item').forEach(item => {
       if (item.querySelector('.nls-cb')?.checked) {
-        const t = (item.querySelector('.item-text')?.textContent || '').trim();
-        if (t && t !== 'Nhập nội dung năng lực số...') {
-          selected.push({ activity_name: actName, text: t });
+        const code    = item.dataset.code || '';
+        const content = (item.querySelector('.item-text')?.textContent || '').trim();
+        if (content && content !== 'Nhập nội dung năng lực số...') {
+          const fullText = code ? `${code} – ${content}` : content;
+          selected.push({ activity_name: actName, text: fullText });
         }
       }
     });
@@ -1015,7 +1160,7 @@ function resetToStep2() {
 }
 
 function reset2() {
-  file2 = null; frameworkTx = ''; nlsAnalysis = null; fwOpen = false;
+  file2 = null; frameworkTx = ''; nlsAnalysis = null; fwOpen = false; frameworkCodes = [];
   document.getElementById('fi2').value = '';
   document.getElementById('fi-fw').value = '';
   document.getElementById('sel-mon').value = '';

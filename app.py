@@ -1637,6 +1637,57 @@ def extract_text_from_upload(file_path: str, filename: str) -> str:
     return ""
 
 
+def _extract_coded_items(text: str) -> list:
+    """
+    Quét văn bản khung NLS để tìm CÁC MỤC CÓ MÃ ĐỊNH DANH.
+    Hỗ trợ các định dạng phổ biến trong chương trình VN:
+      2.4.TC2a    → section.sub.TypeCodeLetter
+      NL1.2, NL3b → TypeNumber.Sub
+      TC2a, KNS4  → TypeCodeLetter
+      1.1, 2.3.4  → Số thứ tự thuần túy
+    Trả về danh sách [{"code": str, "text": "MÃ – Nội dung", "checked": True}, ...]
+    """
+    import uuid, re
+
+    CODE_RE = re.compile(
+        r'(?m)^[ \t]*'
+        r'('
+        r'\d+\.\d+\.[A-ZĐẮẶẪẨẦ]{1,5}\d+[a-z]?'   # 2.4.TC2a, 1.1.NL3b
+        r'|[A-ZĐẮẶẪẨẦ]{2,5}\d+\.\d+\.?\d*[a-z]?'  # NL1.2.3a, TC2.4
+        r'|[A-ZĐẮẶẪẨẦ]{2,5}\d+[a-z]?'              # TC2a, NL3, KNS4b
+        r'|\d+\.\d+\.?\d*[a-zA-Z]?'                 # 1.1, 2.3.4, 1.1a
+        r')'
+        r'[ \t]*[).\-–:]+[ \t]*'                    # dấu ngăn cách
+        r'(.{15,300})',                               # nội dung năng lực
+        re.UNICODE
+    )
+
+    items = []
+    seen: set = set()
+
+    for m in CODE_RE.finditer(text):
+        code    = m.group(1).strip()
+        content = m.group(2).strip()
+        key     = code.upper()
+
+        # Bỏ qua mã trùng hoặc nội dung quá ngắn
+        if key in seen or len(content) < 15:
+            continue
+        # Bỏ qua dòng trông như metadata (tiêu đề, số tiết...)
+        if re.search(r'\d+\s*tiết|\d{4}[-–]\d{4}|tuần|học kỳ', content, re.I):
+            continue
+
+        seen.add(key)
+        items.append({
+            "id":      str(uuid.uuid4())[:8],
+            "code":    code,
+            "text":    f"{code} – {content}",
+            "checked": True,
+        })
+
+    return items
+
+
 def _text_to_items(text: str) -> list:
     """
     Chuyển văn bản khung NLS → danh sách checkbox item.
@@ -1690,11 +1741,40 @@ def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str
     import uuid
 
     if framework_text.strip():
-        # Dùng khung tùy chỉnh của giáo viên — chỉ khi trích được NLS thực sự
-        items = _text_to_items(framework_text)
-        if items:
-            return {"source": "framework", "activities": [], "fallback": items, "keywords": []}
-        # Không trích được NLS từ framework → cảnh báo và dùng database
+        # 1. Ưu tiên: tìm mã định danh (2.4.TC2a, NL1.2, ...)
+        coded = _extract_coded_items(framework_text)
+        if coded:
+            logger.info(f"Tìm thấy {len(coded)} mục có mã định danh trong framework.")
+            codes_list = [
+                {
+                    "code":      c["code"],
+                    "content":   c["text"].split(" – ", 1)[-1] if " – " in c["text"] else c["text"],
+                    "full_text": c["text"],
+                }
+                for c in coded
+            ]
+            return {
+                "source":     "framework_coded",
+                "has_codes":  True,
+                "activities": [],
+                "fallback":   coded,
+                "codes_list": codes_list,
+                "keywords":   [],
+            }
+
+        # 2. Không có mã → thử lọc theo từ khóa NLS
+        kw_items = _text_to_items(framework_text)
+        if kw_items:
+            logger.info(f"Tìm thấy {len(kw_items)} dòng NLS (không có mã) trong framework.")
+            return {
+                "source":    "framework",
+                "has_codes": False,
+                "activities": [],
+                "fallback":  kw_items,
+                "keywords":  [],
+            }
+
+        # 3. Framework không chứa NLS → dùng database
         logger.info("Framework upload không chứa NLS rõ ràng — dùng database thay thế.")
 
     # Phân tích tiến trình bài dạy từ database
@@ -1811,6 +1891,7 @@ async def analyze_nls_interactive_endpoint(
     user: dict = Depends(get_current_user),
 ):
     """Phân tích bài dạy → trả về danh sách NLS dạng checkbox."""
+    uid = user["sub"]   # dùng để log, không tính quota (phân tích = miễn phí)
     if not file.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Chỉ hỗ trợ .docx")
 
@@ -1820,6 +1901,7 @@ async def analyze_nls_interactive_endpoint(
     try:
         doc    = Document(tmp.name)
         result = build_interactive_nls(doc, mon, cap, framework_text)
+        logger.info(f"analyze-nls-interactive: user={uid}, source={result.get('source')}")
     except Exception as exc:
         raise HTTPException(500, f"Lỗi phân tích: {exc}")
     finally:
@@ -1843,7 +1925,7 @@ async def inject_nls_selected_endpoint(
 ):
     """Nhận danh sách NLS đã duyệt → chèn vào .docx và trả về file."""
     import json as _json
-    _check_quota(user["sub"])
+    check_and_increment_quota(user["sub"])
 
     if not file.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Chỉ hỗ trợ .docx")
