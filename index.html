@@ -294,7 +294,8 @@
             <div id="fw-status" class="hidden mt-2 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
               <span class="text-green-500 text-base">✅</span>
               <span id="fw-status-text" class="text-green-700 font-bold text-xs flex-1"></span>
-              <button onclick="clearFramework()" class="text-gray-400 hover:text-red-400 text-xs font-bold">Xóa</button>
+              <button onclick="clearFramework()" class="text-gray-400 hover:text-red-400 text-xs font-bold">Xóa session</button>
+              <button id="fw-clear-ls" onclick="clearFrameworkLS()" class="hidden text-gray-400 hover:text-red-500 text-xs font-bold ml-1">& localStorage</button>
             </div>
             <div id="fw-loading" class="hidden mt-2 flex items-center gap-2 px-3 py-2">
               <div class="flex gap-1"><span class="dot bg-gray-400"></span><span class="dot bg-gray-400"></span><span class="dot bg-gray-400"></span></div>
@@ -497,6 +498,31 @@ async function onLoggedIn(session) {
   show("main-app");
   await loadUserInfo();
   setupDnD();
+  _loadFrameworkFromLS();    // Nạp codes từ localStorage (nếu có file custom)
+  await _loadBTCCodes();     // Luôn load 109 mã từ bảng tra cứu chuẩn
+}
+
+// Load 109 mã từ backend (bang-tra-cuu-nls-cua-hs.pdf hardcoded)
+async function _loadBTCCodes() {
+  try {
+    const r = await fetch('/nls-codes');
+    if (!r.ok) return;
+    const data = await r.json();
+    // Nếu chưa có custom framework → dùng 109 mã chuẩn
+    if (frameworkCodes.length === 0) {
+      frameworkCodes = data.codes.map(c => ({
+        code:      c.code,
+        content:   c.content,
+        full_text: c.full_text,
+        section:   c.section,
+        category:  c.category,
+      }));
+      frameworkFileName = data.source;
+      console.log(`Đã nạp ${data.total} mã NLS từ ${data.source}`);
+    }
+  } catch(e) {
+    console.warn('Không nạp được /nls-codes:', e);
+  }
 }
 
 function onLoggedOut() {
@@ -749,9 +775,14 @@ async function handleFrameworkFile(e) {
     if (!r.ok) { const er = await r.json(); throw new Error(er.detail || 'Lỗi'); }
     const data = await r.json();
     frameworkTx = data.text;
+
+    // Trích xuất mã ngay phía client để lưu localStorage
+    // (sẽ được cập nhật chính xác hơn khi nhận kết quả phân tích từ server)
     document.getElementById('fw-status-text').textContent =
-      `✓ Đã đọc "${f.name}" — ${data.char_count.toLocaleString()} ký tự (hệ thống sẽ tự lọc các dòng NLS phù hợp)`;
+      `⏳ Đang xử lý "${f.name}"... (${data.char_count.toLocaleString()} ký tự)`;
     show('fw-status');
+    // Lưu tên file để hiển thị sau
+    frameworkFileName = f.name;
   } catch(err) {
     hide('fw-loading');
     frameworkTx = '';
@@ -823,13 +854,60 @@ const COLOR_MAP = {
   gray:    { bg:'bg-gray-50',    border:'border-gray-200',   head:'text-gray-700'   },
 };
 
-// ── Kho mã định danh từ framework ─────────────────────────────────────────────
-let frameworkCodes = [];   // [{code, content, full_text}]
+// ── Kho mã định danh từ bảng tra cứu NLS ─────────────────────────────────────
+// Lưu vào localStorage để không phải upload lại mỗi lần
+const LS_FW_KEY = 'nls_framework_codes_v1';
+const LS_FW_NAME = 'nls_framework_name_v1';
+
+let frameworkCodes = [];      // [{code, content, full_text}]
+let frameworkFileName = '';   // Tên file đã upload
+
+function _loadFrameworkFromLS() {
+  try {
+    const saved = localStorage.getItem(LS_FW_KEY);
+    const name  = localStorage.getItem(LS_FW_NAME) || '';
+    if (saved) {
+      frameworkCodes   = JSON.parse(saved);
+      frameworkFileName = name;
+      _updateFWStatus();
+    }
+  } catch(e) { frameworkCodes = []; }
+}
+
+function _saveFrameworkToLS(codes, filename) {
+  try {
+    localStorage.setItem(LS_FW_KEY,  JSON.stringify(codes));
+    localStorage.setItem(LS_FW_NAME, filename);
+    frameworkFileName = filename;
+  } catch(e) {}
+}
+
+function clearFrameworkLS() {
+  localStorage.removeItem(LS_FW_KEY);
+  localStorage.removeItem(LS_FW_NAME);
+  frameworkCodes   = [];
+  frameworkFileName = '';
+  _updateFWStatus();
+}
+
+function _updateFWStatus() {
+  const statusEl = document.getElementById('fw-status');
+  const textEl   = document.getElementById('fw-status-text');
+  if (!statusEl) return;
+  if (frameworkCodes.length > 0) {
+    textEl.textContent = `✓ Bảng tra cứu: "${frameworkFileName}" — ${frameworkCodes.length} mã (đã lưu)`;
+    show('fw-status');
+    document.getElementById('fw-clear-ls')?.classList.remove('hidden');
+  } else {
+    hide('fw-status');
+  }
+}
 
 function _storeFrameworkCodes(data) {
-  frameworkCodes = [];
+  // Được gọi khi nhận kết quả phân tích từ server
   if (data.has_codes && data.codes_list?.length) {
     frameworkCodes = data.codes_list;
+    // codes đã lưu trong handleFrameworkFile, không cần lưu lại
   }
 }
 
@@ -850,11 +928,18 @@ function _showCodePicker(anchorEl, onSelect) {
     <input id="cp-search" type="text" placeholder="🔍 Tìm mã hoặc nội dung..."
       class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-2">
     <div id="cp-list" class="space-y-0.5"></div>
-    <div class="border-t border-gray-100 mt-1.5 pt-1.5">
-      <button id="cp-custom" class="w-full text-left text-xs text-gray-400 hover:text-indigo-600 font-bold py-1 px-2 rounded-lg hover:bg-indigo-50 transition">
-        ✏️ Nhập mã tùy chỉnh...
-      </button>
-    </div>`;
+    ${frameworkFileName
+      ? `<div class="border-t border-gray-100 mt-1.5 pt-1.5">
+           <p class="text-xs text-gray-400 px-2 py-1 italic">
+             📋 Chỉ dùng mã từ "${frameworkFileName}"
+           </p>
+         </div>`
+      : `<div class="border-t border-gray-100 mt-1.5 pt-1.5">
+           <button id="cp-custom" class="w-full text-left text-xs text-gray-400 hover:text-indigo-600 font-bold py-1 px-2 rounded-lg hover:bg-indigo-50 transition">
+             ✏️ Nhập mã tùy chỉnh...
+           </button>
+         </div>`
+    }`;
 
   const rect = anchorEl.getBoundingClientRect();
   picker.style.cssText = `top:${rect.bottom + 4}px; left:${Math.min(rect.left, window.innerWidth - 296)}px;`;
@@ -877,7 +962,7 @@ function _showCodePicker(anchorEl, onSelect) {
   renderList('');
   document.getElementById('cp-search').addEventListener('input', e => renderList(e.target.value.toLowerCase().trim()));
   document.getElementById('cp-search').focus();
-  document.getElementById('cp-custom').addEventListener('click', () => { _pickerCb?.(null); picker.remove(); });
+  document.getElementById('cp-custom')?.addEventListener('click', () => { _pickerCb?.(null); picker.remove(); });
   setTimeout(() => {
     document.addEventListener('click', function close(e) {
       if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); }
@@ -887,7 +972,13 @@ function _showCodePicker(anchorEl, onSelect) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 function _renderChecklist(data) {
-  _storeFrameworkCodes(data);
+  // Lưu codes vào localStorage khi có mã mới từ server
+  if (data.has_codes && data.codes_list?.length) {
+    frameworkCodes = data.codes_list;
+    _saveFrameworkToLS(frameworkCodes, frameworkFileName || 'framework.pdf');
+    _updateFWStatus();
+  }
+
   const container = document.getElementById('nls-checklist');
   container.innerHTML = '';
 
@@ -897,19 +988,16 @@ function _renderChecklist(data) {
     container.parentElement.insertBefore(b, container);
     return b;
   })();
-  if (data.source === 'framework_coded') {
-    badge.innerHTML = `<div class="mb-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
-      <span class="text-indigo-500 font-black text-xs">🔖 Dùng mã định danh từ khung NLS của Thầy/Cô</span>
-    </div>`;
-  } else if (data.source === 'framework') {
-    badge.innerHTML = `<div class="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-      <span class="text-amber-600 font-black text-xs">📋 Dùng nội dung từ khung NLS đã upload (không tìm thấy mã định danh)</span>
-    </div>`;
-  } else {
-    badge.innerHTML = `<div class="mb-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
-      <span class="text-emerald-600 font-black text-xs">📚 Gợi ý từ cơ sở dữ liệu GDPT 2018</span>
-    </div>`;
-  }
+  const srcMsg = {
+    'framework_coded': `<div class="mb-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
+      <span class="text-indigo-500 font-black text-xs">🔖 Mã xác nhận từ Bảng tra cứu NLS của Thầy/Cô</span></div>`,
+    'btc_database':    `<div class="mb-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
+      <span class="text-indigo-600 font-black text-xs">📋 Gợi ý mã từ <em>bang-tra-cuu-nls-cua-hs.pdf</em> (109 mã chuẩn) — Thầy/Cô chọn thêm từ dropdown</span></div>`,
+    'framework':       `<div class="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+      <span class="text-amber-600 font-black text-xs">📋 Nội dung từ khung NLS đã upload</span></div>`,
+  };
+  badge.innerHTML = srcMsg[data.source] || `<div class="mb-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+    <span class="text-emerald-600 font-black text-xs">📚 Gợi ý NLS tổng quát</span></div>`;
 
   // Keywords
   if (data.keywords?.length) {

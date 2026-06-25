@@ -24,6 +24,9 @@ from lxml import etree
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("giaoan")
 
+# Import bảng tra cứu NLS chuẩn (109 mã từ bang-tra-cuu-nls-cua-hs.pdf)
+from nls_database import BANG_TRA_CUU, BANG_TRA_CUU_MAP, KEYWORD_TO_NLS_CODES, CATEGORY_NAMES
+
 app = FastAPI(title="Chuẩn Hóa Giáo Án")
 
 # Serve thư mục static/ nếu có, hoặc thư mục gốc nếu không có
@@ -1652,13 +1655,19 @@ def _extract_coded_items(text: str) -> list:
     CODE_RE = re.compile(
         r'(?m)^[ \t]*'
         r'('
-        r'\d+\.\d+\.[A-ZĐẮẶẪẨẦ]{1,5}\d+[a-z]?'   # 2.4.TC2a, 1.1.NL3b
-        r'|[A-ZĐẮẶẪẨẦ]{2,5}\d+\.\d+\.?\d*[a-z]?'  # NL1.2.3a, TC2.4
-        r'|[A-ZĐẮẶẪẨẦ]{2,5}\d+[a-z]?'              # TC2a, NL3, KNS4b
-        r'|\d+\.\d+\.?\d*[a-zA-Z]?'                 # 1.1, 2.3.4, 1.1a
+        # 1.1TC1a, 2.4TC2a (KHÔNG có dấu chấm giữa số và chữ — định dạng bang-tra-cuu-nls)
+        r'\d+\.\d+[A-ZĐẮẶẪẨẦ]{1,5}\d+[a-z]?'
+        # 2.4.TC2a, 1.1.NL3b (CÓ dấu chấm giữa số và chữ)
+        r'|\d+\.\d+\.[A-ZĐẮẶẪẨẦ]{1,5}\d+[a-z]?'
+        # NL1.2.3a, TC2.4
+        r'|[A-ZĐẮẶẪẨẦ]{2,5}\d+\.\d+\.?\d*[a-z]?'
+        # TC2a, NL3, KNS4b
+        r'|[A-ZĐẮẶẪẨẦ]{2,5}\d+[a-z]?'
+        # 1.1, 2.3.4 (chỉ số, ít ưu tiên hơn)
+        r'|\d+\.\d+\.?\d*[a-z]?'
         r')'
-        r'[ \t]*[).\-–:]+[ \t]*'                    # dấu ngăn cách
-        r'(.{15,300})',                               # nội dung năng lực
+        r'[ \t]*[).\-–:\s]+[ \t]*'
+        r'(.{10,300})',
         re.UNICODE
     )
 
@@ -1733,73 +1742,104 @@ def _text_to_items(text: str) -> list:
     return items[:30]
 
 
+def _suggest_codes_from_lesson(text_norm: str) -> list[dict]:
+    """
+    Gợi ý mã NLS từ BANG_TRA_CUU dựa trên từ khóa trong bài dạy.
+    TUYỆT ĐỐI chỉ dùng mã có sẵn trong BANG_TRA_CUU_MAP.
+    """
+    import uuid
+    seen: set[str] = set()
+    result: list[dict] = []
+
+    for kw, codes in KEYWORD_TO_NLS_CODES.items():
+        if kw in text_norm:
+            for code in codes:
+                if code in BANG_TRA_CUU_MAP and code not in seen:
+                    seen.add(code)
+                    entry = BANG_TRA_CUU_MAP[code]
+                    result.append({
+                        "id":       str(uuid.uuid4())[:8],
+                        "code":     code,
+                        "text":     f"{code} – {entry['content']}",
+                        "checked":  True,
+                        "section":  entry["section"],
+                    })
+    return result
+
+
 def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str = "") -> dict:
     """
     Phân tích tài liệu → trả về cấu trúc NLS có thể chọn/sửa.
-    Nếu có framework_text (khung riêng của giáo viên) → ưu tiên dùng đó.
+    Luôn dùng mã từ BANG_TRA_CUU (bang-tra-cuu-nls-cua-hs.pdf).
+    Không bao giờ tự bịa mã mới.
     """
     import uuid
 
+    # Nếu có framework upload → chỉ chấp nhận mã khớp với BANG_TRA_CUU_MAP
     if framework_text.strip():
-        # 1. Ưu tiên: tìm mã định danh (2.4.TC2a, NL1.2, ...)
         coded = _extract_coded_items(framework_text)
-        if coded:
-            logger.info(f"Tìm thấy {len(coded)} mục có mã định danh trong framework.")
-            codes_list = [
-                {
-                    "code":      c["code"],
-                    "content":   c["text"].split(" – ", 1)[-1] if " – " in c["text"] else c["text"],
-                    "full_text": c["text"],
-                }
-                for c in coded
-            ]
+        # Lọc chỉ giữ mã có trong BANG_TRA_CUU
+        validated = []
+        for c in coded:
+            raw_code = c["code"].upper().replace(" ", "")
+            # Tìm khớp trong map (case-insensitive)
+            matched = next(
+                (k for k in BANG_TRA_CUU_MAP if k.upper() == raw_code), None
+            )
+            if matched:
+                entry = BANG_TRA_CUU_MAP[matched]
+                validated.append({
+                    "id":      c["id"],
+                    "code":    matched,
+                    "text":    f"{matched} – {entry['content']}",
+                    "checked": True,
+                    "section": entry["section"],
+                })
+            else:
+                logger.warning(f"Mã '{c['code']}' không có trong BANG_TRA_CUU — bỏ qua.")
+
+        if validated:
+            logger.info(f"Framework: {len(validated)}/{len(coded)} mã khớp BANG_TRA_CUU.")
             return {
                 "source":     "framework_coded",
                 "has_codes":  True,
                 "activities": [],
-                "fallback":   coded,
-                "codes_list": codes_list,
+                "fallback":   validated,
                 "keywords":   [],
             }
+        logger.info("Framework không chứa mã khớp BANG_TRA_CUU — dùng phân tích bài dạy.")
 
-        # 2. Không có mã → thử lọc theo từ khóa NLS
-        kw_items = _text_to_items(framework_text)
-        if kw_items:
-            logger.info(f"Tìm thấy {len(kw_items)} dòng NLS (không có mã) trong framework.")
-            return {
-                "source":    "framework",
-                "has_codes": False,
-                "activities": [],
-                "fallback":  kw_items,
-                "keywords":  [],
-            }
+    # Phân tích tiến trình bài dạy + gợi ý mã từ BANG_TRA_CUU
+    text_norm = _norm(extract_doc_text(doc))
+    det_acts  = detect_activities(text_norm)
+    found_kws = list(find_keywords(text_norm).keys())
+    suggested = _suggest_codes_from_lesson(text_norm)
 
-        # 3. Framework không chứa NLS → dùng database
-        logger.info("Framework upload không chứa NLS rõ ràng — dùng database thay thế.")
-
-    # Phân tích tiến trình bài dạy từ database
-    analysis = analyze_lesson_for_nls(doc, mon, cap)
-
-    activities = [
-        {
-            "type": act["type"],
-            "name": act["name"],
-            "items": [
-                {"id": str(uuid.uuid4())[:8], "text": nls, "checked": True}
-                for nls in act["nls"]
-            ],
+    # Nhóm gợi ý theo loại hoạt động phát hiện được
+    if det_acts and suggested:
+        # Tạo activity sections chứa mã gợi ý (teacher chọn thêm từ dropdown)
+        activities = []
+        for act_type in det_acts:
+            activities.append({
+                "type":  act_type,
+                "name":  ACTIVITY_NAMES.get(act_type, act_type),
+                "items": [],   # Trống — teacher tự chọn mã từ dropdown
+            })
+        return {
+            "source":     "btc_database",    # bang tra cuu
+            "has_codes":  True,
+            "activities": activities,
+            "fallback":   suggested,          # Gợi ý sẵn để teacher chọn
+            "keywords":   found_kws,
         }
-        for act in analysis["activities"]
-    ]
-    fallback = [
-        {"id": str(uuid.uuid4())[:8], "text": nls, "checked": True}
-        for nls in analysis["fallback"]
-    ]
+
+    # Không detect được hoạt động → trả gợi ý phẳng
     return {
-        "source": "database",
-        "activities": activities,
-        "fallback": fallback,
-        "keywords": analysis.get("keywords", []),
+        "source":     "btc_database",
+        "has_codes":  True,
+        "activities": [],
+        "fallback":   suggested,
+        "keywords":   found_kws,
     }
 
 
@@ -1859,6 +1899,29 @@ def inject_competence_to_docx(
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.get("/nls-codes")
+async def get_nls_codes():
+    """
+    Trả về toàn bộ 109 mã NLS từ bang-tra-cuu-nls-cua-hs.pdf.
+    Đây là nguồn duy nhất — frontend dùng để hiện dropdown picker.
+    """
+    return JSONResponse({
+        "total":      len(BANG_TRA_CUU),
+        "source":     "bang-tra-cuu-nls-cua-hs.pdf",
+        "categories": CATEGORY_NAMES,
+        "codes":      [
+            {
+                "code":      item["code"],
+                "content":   item["content"],
+                "full_text": f"{item['code']} – {item['content']}",
+                "section":   item["section"],
+                "category":  item["category"],
+            }
+            for item in BANG_TRA_CUU
+        ],
+    })
+
 
 @app.post("/upload-framework")
 async def upload_framework_endpoint(file: UploadFile = File(...)):
