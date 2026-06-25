@@ -845,33 +845,63 @@ def _make_wp(text: str, bold: bool = False, indent_twips: int = 0) -> object:
 
 def _find_insertion_wp(doc: Document):
     """
-    Tìm <w:p> XML element phù hợp để chèn Năng lực số SAU ĐÓ.
-    Ưu tiên: đoạn cuối cùng chứa 'năng lực' (trong 40 đoạn đầu)
-    → đoạn chứa 'mục tiêu'
-    → đoạn không rỗng đầu tiên
+    Tìm đoạn văn CUỐI của phần 'Năng lực' để chèn NLS vào SAU ĐÓ.
+
+    Thuật toán:
+    1. Tìm vị trí bắt đầu của phần 'Năng lực' (heading hoặc dòng chứa 'năng lực').
+    2. Quét tiếp đến khi gặp dòng đánh dấu kết thúc phần đó
+       (ví dụ: 'phẩm chất', 'thái độ', 'thiết bị', 'chuẩn bị', 'tiến trình').
+    3. Đoạn ngay trước khi gặp keyword kết thúc chính là vị trí chèn.
+
+    Kết quả: NLS được chèn vào CUỐI phần Năng lực, không phải ở giữa.
     """
     paras = doc.paragraphs
-    search_pool = paras[:40]
 
-    # Ưu tiên 1: đoạn cuối có 'năng lực'
-    nangluuc_p = None
-    for para in search_pool:
-        if "năng lực" in para.text.lower():
-            nangluuc_p = para._p
-    if nangluuc_p is not None:
-        return nangluuc_p
+    # ── Từ khóa kết thúc phần Năng lực ────────────────────────────────────────
+    # Khi gặp những từ này → phần Năng lực đã kết thúc
+    END_SECTION_KW = [
+        "phẩm chất", "thái độ", "đức tính",
+        "thiết bị", "học liệu", "đồ dùng",
+        "chuẩn bị", "phương tiện",
+        "tiến trình", "tổ chức hoạt động",
+        "phương pháp", "hình thức",
+        "kiểm tra", "đánh giá",
+    ]
 
-    # Ưu tiên 2: đoạn có 'mục tiêu'
-    for para in search_pool:
-        if "mục tiêu" in para.text.lower():
-            return para._p
+    # ── Bước 1: Tìm vị trí đoạn bắt đầu phần 'Năng lực' ──────────────────────
+    nl_start_idx: int | None = None
+    for i, para in enumerate(paras[:60]):
+        tl = para.text.strip().lower()
+        if "năng lực" in tl:
+            nl_start_idx = i   # ghi nhận CUỐI cùng trong vùng tìm kiếm
 
-    # Ưu tiên 3: đoạn không rỗng đầu tiên
-    for para in paras:
-        if para.text.strip():
-            return para._p
+    if nl_start_idx is None:
+        # Fallback 1: chèn sau đoạn chứa 'mục tiêu'
+        for para in paras[:40]:
+            if "mục tiêu" in para.text.lower():
+                return para._p
+        # Fallback 2: đoạn không rỗng đầu tiên
+        for para in paras:
+            if para.text.strip():
+                return para._p
+        return None
 
-    return None
+    # ── Bước 2: Quét tiếp từ nl_start_idx để tìm cuối phần Năng lực ──────────
+    last_in_section = nl_start_idx
+    for i in range(nl_start_idx + 1, min(nl_start_idx + 60, len(paras))):
+        tl = paras[i].text.strip().lower()
+        if not tl:
+            continue  # bỏ qua dòng trống
+
+        # Phát hiện keyword kết thúc phần Năng lực
+        if any(kw in tl for kw in END_SECTION_KW):
+            break
+
+        last_in_section = i   # vẫn trong phần Năng lực → cập nhật
+
+    logger.debug(f"_find_insertion_wp: chèn sau đoạn [{last_in_section}] "
+                 f"'{paras[last_in_section].text.strip()[:60]}'")
+    return paras[last_in_section]._p
 
 
 def insert_nang_luc_so(doc: Document, competencies: list, mon_label: str, cap_label: str):
@@ -1742,28 +1772,126 @@ def _text_to_items(text: str) -> list:
     return items[:30]
 
 
-def _suggest_codes_from_lesson(text_norm: str) -> list[dict]:
+def _match_activity_type(heading: str) -> str:
+    """Xác định loại hoạt động từ tiêu đề heading."""
+    hn = _norm(heading)
+    for act_type, markers in ACTIVITY_MARKERS.items():
+        if any(m in hn for m in markers):
+            return act_type
+    return "other"
+
+
+def _extract_activities_with_nls(doc: Document) -> list[dict]:
     """
-    Gợi ý mã NLS từ BANG_TRA_CUU dựa trên từ khóa trong bài dạy.
-    TUYỆT ĐỐI chỉ dùng mã có sẵn trong BANG_TRA_CUU_MAP.
+    Phát hiện từng hoạt động học tập trong giáo án, trích xuất nội dung,
+    rồi gợi ý mã NLS phù hợp với BỐI CẢNH CỤ THỂ của mỗi hoạt động.
+
+    Pattern nhận dạng heading hoạt động:
+      "Hoạt động 1:", "HĐ 2:", "HOẠT ĐỘNG A", "Hoạt động Khởi động", ...
     """
     import uuid
+
+    ACT_HEAD_RE = re.compile(
+        r'(?i)(?:hoạt\s*động|h[.đd])\s*(?:\d+|[a-z]|[ivx]+)',
+        re.UNICODE
+    )
+
+    activities: list[dict] = []
+    current_type: str | None = None
+    current_name: str = ""
+    current_texts: list[str] = []
+
+    def _flush():
+        """Lưu hoạt động hiện tại nếu có."""
+        if current_type is None or not current_texts:
+            return
+        content   = " ".join(current_texts)
+        suggested = _suggest_codes_from_lesson(_norm(content))
+        if suggested:
+            activities.append({
+                "type":  current_type,
+                "name":  current_name or "Hoạt động",
+                "codes": suggested,
+            })
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        # Phát hiện heading hoạt động
+        if ACT_HEAD_RE.search(text) and len(text) < 120:
+            _flush()
+            current_type  = _match_activity_type(text)
+            current_name  = text[:80]
+            current_texts = []
+        elif current_type is not None:
+            # Dừng nếu gặp phần lớn khác (Mục tiêu, Thiết bị, ...)
+            tl = text.lower()
+            if any(kw in tl for kw in
+                   ["ii. thiết bị", "iii. tiến trình", "a. mục tiêu",
+                    "i. mục tiêu", "iv.", "v. "]):
+                _flush()
+                current_type = None
+                current_texts = []
+            else:
+                current_texts.append(text)
+
+    _flush()  # Lưu activity cuối
+
+    # Gán id cho từng item
+    for act in activities:
+        for item in act["codes"]:
+            item.setdefault("id", str(uuid.uuid4())[:8])
+
+    return activities
+
+
+def _suggest_codes_from_lesson(text_norm: str, max_codes: int = 5) -> list[dict]:
+    """
+    Gợi ý tối đa max_codes mã NLS từ BANG_TRA_CUU dựa trên từ khóa trong bài dạy.
+    TUYỆT ĐỐI chỉ dùng mã có sẵn trong BANG_TRA_CUU_MAP.
+    Dùng word-boundary để tránh khớp sai (ví dụ 'ai' trong 'lại').
+    """
+    import uuid
+
     seen: set[str] = set()
-    result: list[dict] = []
+    # Danh sách (code, priority) - ưu tiên từ khóa dài/cụ thể hơn
+    scored: list[tuple[int, str]] = []
 
     for kw, codes in KEYWORD_TO_NLS_CODES.items():
-        if kw in text_norm:
-            for code in codes:
-                if code in BANG_TRA_CUU_MAP and code not in seen:
-                    seen.add(code)
-                    entry = BANG_TRA_CUU_MAP[code]
-                    result.append({
-                        "id":       str(uuid.uuid4())[:8],
-                        "code":     code,
-                        "text":     f"{code} – {entry['content']}",
-                        "checked":  True,
-                        "section":  entry["section"],
-                    })
+        kw_norm = _norm(kw)
+        kw_len  = len(kw_norm)
+
+        # Word-boundary check: kw phải đứng độc lập (không là phần giữa từ khác)
+        # Dùng regex chỉ cho từ khóa ngắn (≤ 3 ký tự) để tránh false positive
+        if kw_len <= 3:
+            if not re.search(r'(?<![a-z])' + re.escape(kw_norm) + r'(?![a-z])', text_norm):
+                continue
+        else:
+            if kw_norm not in text_norm:
+                continue
+
+        priority = kw_len  # từ khóa càng dài → càng cụ thể → ưu tiên cao hơn
+        for code in codes:
+            if code in BANG_TRA_CUU_MAP and code not in seen:
+                seen.add(code)
+                scored.append((priority, code))
+
+    # Sắp xếp theo độ ưu tiên giảm dần, lấy max_codes mã đầu
+    scored.sort(key=lambda x: -x[0])
+    top_codes = [code for _, code in scored[:max_codes]]
+
+    result: list[dict] = []
+    for code in top_codes:
+        entry = BANG_TRA_CUU_MAP[code]
+        result.append({
+            "id":      str(uuid.uuid4())[:8],
+            "code":    code,
+            "text":    f"{code} – {entry['content']}",
+            "checked": True,
+            "section": entry["section"],
+        })
     return result
 
 
@@ -1809,31 +1937,42 @@ def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str
             }
         logger.info("Framework không chứa mã khớp BANG_TRA_CUU — dùng phân tích bài dạy.")
 
-    # Phân tích tiến trình bài dạy + gợi ý mã từ BANG_TRA_CUU
-    text_norm = _norm(extract_doc_text(doc))
-    det_acts  = detect_activities(text_norm)
-    found_kws = list(find_keywords(text_norm).keys())
-    suggested = _suggest_codes_from_lesson(text_norm)
+    # Phân tích từng hoạt động học tập và gợi ý mã NLS theo bối cảnh cụ thể
+    import uuid as _uuid
+    text_norm  = _norm(extract_doc_text(doc))
+    found_kws  = list(find_keywords(text_norm).keys())
 
-    # Nhóm gợi ý theo loại hoạt động phát hiện được
-    if det_acts and suggested:
-        # Tạo activity sections chứa mã gợi ý (teacher chọn thêm từ dropdown)
+    # Trích xuất TỪNG hoạt động + gợi ý mã phù hợp với nội dung riêng
+    act_sections = _extract_activities_with_nls(doc)
+
+    if act_sections:
+        # Chuyển codes → items theo định dạng frontend
         activities = []
-        for act_type in det_acts:
+        for act in act_sections:
+            items = [
+                {
+                    "id":      c.get("id", str(_uuid.uuid4())[:8]),
+                    "code":    c["code"],
+                    "text":    c["text"],
+                    "checked": True,
+                }
+                for c in act["codes"]
+            ]
             activities.append({
-                "type":  act_type,
-                "name":  ACTIVITY_NAMES.get(act_type, act_type),
-                "items": [],   # Trống — teacher tự chọn mã từ dropdown
+                "type":  act["type"],
+                "name":  act["name"],
+                "items": items,
             })
         return {
-            "source":     "btc_database",    # bang tra cuu
+            "source":     "btc_database",
             "has_codes":  True,
             "activities": activities,
-            "fallback":   suggested,          # Gợi ý sẵn để teacher chọn
+            "fallback":   [],
             "keywords":   found_kws,
         }
 
-    # Không detect được hoạt động → trả gợi ý phẳng
+    # Không phát hiện được từng hoạt động → gợi ý chung từ toàn bộ bài
+    suggested = _suggest_codes_from_lesson(text_norm)
     return {
         "source":     "btc_database",
         "has_codes":  True,
