@@ -1638,14 +1638,48 @@ def extract_text_from_upload(file_path: str, filename: str) -> str:
 
 
 def _text_to_items(text: str) -> list:
-    """Chuyển văn bản khung NLS → danh sách checkbox item."""
-    import uuid
+    """
+    Chuyển văn bản khung NLS → danh sách checkbox item.
+    Chỉ lấy các dòng trông giống năng lực/kỹ năng thực sự.
+    Lọc bỏ: tiêu đề ALL CAPS, thời gian, số tiết, mã môn, metadata.
+    """
+    import uuid, re
+
+    # Từ khóa gợi ý đây là dòng NLS
+    NLS_KEYWORDS = (
+        "sử dụng", "khai thác", "phân tích", "đánh giá", "tạo lập",
+        "giao tiếp", "hợp tác", "tìm kiếm", "thu thập", "trình bày",
+        "nghiên cứu", "thiết kế", "lập trình", "ứng dụng", "giải quyết",
+        "nhận biết", "phân biệt", "bảo vệ", "an toàn", "số", "digital",
+        "công cụ", "phần mềm", "ứng dụng", "internet", "mạng", "dữ liệu",
+        "năng lực", "kỹ năng", "thái độ", "kiến thức", "hiểu",
+    )
+    # Pattern loại trừ: dòng all caps, số tiết, mã năm học, tiêu đề section
+    SKIP_PATTERNS = (
+        re.compile(r"^[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẠ\s\d:;.,/–\-]{10,}$"),  # all caps
+        re.compile(r"\d+\s*tiết"),           # "140 tiết", "18 tuần"
+        re.compile(r"\d{4}\s*[-–]\s*\d{4}"), # năm học 2024-2025
+        re.compile(r"^(môn|lớp|khối|học kỳ|hk|tuần|năm học|trường|tên|ngày)[\s:]+", re.I),
+        re.compile(r"^[IVX]+\.\s"),          # I. II. III. mục lớn
+        re.compile(r"^\d+\.\s+[A-ZÀÁÂ]"),   # 1. Phân phối...
+        re.compile(r"^(kế hoạch|phân phối|nhiệm vụ|tiến độ)", re.I),
+    )
+
     items = []
-    for line in text.splitlines():
-        line = line.strip().lstrip("•-*+○●▸▪►⁃–—").strip()
-        if len(line) > 15:
-            items.append({"id": str(uuid.uuid4())[:8], "text": line, "checked": True})
-    return items[:40]
+    for raw in text.splitlines():
+        line = raw.strip().lstrip("•-*+○●▸▪►⁃–—◆→").strip()
+        if len(line) < 20 or len(line) > 300:
+            continue
+        # Bỏ qua dòng bị loại trừ
+        if any(p.search(line) for p in SKIP_PATTERNS):
+            continue
+        # Ưu tiên dòng có từ khóa NLS
+        line_lower = line.lower()
+        if not any(kw in line_lower for kw in NLS_KEYWORDS):
+            continue
+        items.append({"id": str(uuid.uuid4())[:8], "text": line, "checked": True})
+
+    return items[:30]
 
 
 def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str = "") -> dict:
@@ -1656,9 +1690,12 @@ def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str
     import uuid
 
     if framework_text.strip():
-        # Dùng khung tùy chỉnh của giáo viên
+        # Dùng khung tùy chỉnh của giáo viên — chỉ khi trích được NLS thực sự
         items = _text_to_items(framework_text)
-        return {"source": "framework", "activities": [], "fallback": items, "keywords": []}
+        if items:
+            return {"source": "framework", "activities": [], "fallback": items, "keywords": []}
+        # Không trích được NLS từ framework → cảnh báo và dùng database
+        logger.info("Framework upload không chứa NLS rõ ràng — dùng database thay thế.")
 
     # Phân tích tiến trình bài dạy từ database
     analysis = analyze_lesson_for_nls(doc, mon, cap)

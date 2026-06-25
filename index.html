@@ -284,7 +284,8 @@
             <span id="fw-arrow">▼</span>
           </button>
           <div id="framework-panel" class="hidden mt-2 border border-dashed border-gray-300 rounded-xl p-3 bg-gray-50">
-            <p class="text-xs text-gray-500 font-semibold mb-2">Upload file khung năng lực số (PDF / DOCX / TXT):</p>
+            <p class="text-xs text-gray-500 font-semibold mb-1">Upload file khung NLS của trường/Sở (PDF / DOCX / TXT):</p>
+            <p class="text-xs text-amber-600 font-semibold mb-2">⚠️ File này phải chứa <strong>danh sách năng lực số</strong>, không phải kế hoạch giáo dục hay giáo án.</p>
             <div id="dz-fw" onclick="document.getElementById('fi-fw').click()"
               class="cursor-pointer border border-dashed border-gray-300 rounded-xl py-4 text-center hover:bg-white transition">
               <p class="text-xs text-gray-500 font-bold">Bấm để chọn file hoặc kéo thả</p>
@@ -749,7 +750,7 @@ async function handleFrameworkFile(e) {
     const data = await r.json();
     frameworkTx = data.text;
     document.getElementById('fw-status-text').textContent =
-      `✓ Đã đọc "${f.name}" — ${data.char_count.toLocaleString()} ký tự`;
+      `✓ Đã đọc "${f.name}" — ${data.char_count.toLocaleString()} ký tự (hệ thống sẽ tự lọc các dòng NLS phù hợp)`;
     show('fw-status');
   } catch(err) {
     hide('fw-loading');
