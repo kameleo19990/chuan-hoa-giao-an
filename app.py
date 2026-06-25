@@ -786,6 +786,46 @@ def fix_mathtype_ole_fallback(doc):
             if wp is not None and wp.tag == f"{{{W_NS}}}p": _center_wp(wp)
 
 
+def _auto_insert_nls_in_activities(doc: Document) -> None:
+    """
+    TỰ ĐỘNG phát hiện hoạt động học tập trong giáo án → gợi ý mã NLS
+    phù hợp bối cảnh → chèn thẳng vào bảng tiến trình của từng hoạt động.
+    Mỗi hàng NLS thêm vào gồm:  Mã + Nội dung NLS  /  ▶ Công cụ gợi ý
+
+    Bỏ qua nếu bảng đã có hàng 'Năng lực số tích hợp' (tránh trùng).
+    """
+    # Kiểm tra đã chèn NLS vào bảng chưa
+    for tbl in doc.tables:
+        for row in tbl.rows:
+            for cell in row.cells:
+                if "năng lực số tích hợp" in cell.text.lower():
+                    logger.info("Bảng đã có NLS — bỏ qua auto-insert.")
+                    return
+
+    # Trích xuất từng hoạt động + gợi ý mã NLS theo nội dung cụ thể
+    act_sections = _extract_activities_with_nls(doc)
+    if not act_sections:
+        logger.info("Không phát hiện hoạt động nào trong giáo án.")
+        return
+
+    # Chuyển sang định dạng selected_items để tái dùng insert_nls_into_activity_tables
+    selected_items: list[dict] = []
+    for act in act_sections:
+        for code_item in act.get("codes", []):
+            selected_items.append({
+                "activity_name": act["name"],
+                "text":          code_item.get("text",  ""),
+                "code":          code_item.get("code",  ""),
+                "tools":         code_item.get("tools", []),
+            })
+
+    if not selected_items:
+        return
+
+    logger.info(f"Auto-insert NLS: {len(act_sections)} HĐ, {len(selected_items)} mã.")
+    insert_nls_into_activity_tables(doc, selected_items)
+
+
 def process_docx(input_path, output_path):
     import traceback
     doc = Document(input_path)
@@ -805,6 +845,13 @@ def process_docx(input_path, output_path):
     resize_inline_images(doc)
     format_header_footer(doc)
     fix_mathtype_ole_fallback(doc)
+
+    # Tự động chèn NLS phù hợp bối cảnh vào bảng tiến trình từng hoạt động
+    try:
+        _auto_insert_nls_in_activities(doc)
+    except Exception as e:
+        logger.warning(f"auto_insert_nls: {e}\n{traceback.format_exc()}")
+
     doc.save(output_path)
 
 
