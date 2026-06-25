@@ -25,10 +25,26 @@ logger = logging.getLogger("giaoan")
 
 app = FastAPI(title="Chuẩn Hóa Giáo Án")
 
-# Serve thư mục static/ (supabase.min.js, ...) từ cùng origin → tránh bị trình duyệt chặn CDN
-_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+# Serve thư mục static/ nếu có, hoặc thư mục gốc nếu không có
+_app_dir    = os.path.dirname(os.path.abspath(__file__))
+_static_dir = os.path.join(_app_dir, "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+# Route riêng cho supabase.min.js (dù file ở root hay static/)
+@app.get("/supabase.min.js", include_in_schema=False)
+async def serve_supabase_js():
+    for candidate in [
+        os.path.join(_static_dir, "supabase.min.js"),   # static/supabase.min.js
+        os.path.join(_app_dir,    "supabase.min.js"),   # root/supabase.min.js
+    ]:
+        if os.path.isfile(candidate):
+            return FileResponse(candidate, media_type="application/javascript")
+    # Fallback: redirect về CDN
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(
+        "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
+    )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SUPABASE AUTH
