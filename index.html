@@ -465,8 +465,29 @@ async function loadUserInfo() {
 // ── Token helper ──────────────────────────────────────────────────
 async function getToken() {
   if (!_supabase) return null;
-  const { data } = await _supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+
+  // Đọc thẳng từ localStorage — không gọi network, không bị treo
+  try {
+    const KEY = 'sb-xeulysxcymsedepfqlaa-auth-token';
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const token  = parsed?.access_token ?? parsed?.session?.access_token;
+      if (token) return token;
+    }
+  } catch(e) { console.warn('localStorage token read failed:', e); }
+
+  // Fallback: gọi getSession() với timeout 5 giây
+  try {
+    const { data } = await Promise.race([
+      _supabase.auth.getSession(),
+      new Promise((_, rej) => setTimeout(() => rej('timeout'), 5000))
+    ]);
+    return data?.session?.access_token ?? null;
+  } catch(e) {
+    console.warn('getSession timeout/failed:', e);
+    return null;
+  }
 }
 
 async function authFetch(url, opts = {}) {
