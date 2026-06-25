@@ -780,9 +780,15 @@ def fix_mathtype_ole_fallback(doc):
 
 
 def process_docx(input_path, output_path):
-    # win32com chỉ chạy trên Windows — bỏ qua trên Linux/Render
+    import traceback
     doc = Document(input_path)
-    convert_latex_in_doc(doc)       # Bước 0: $...$ → OMML thật (từ Gemini/ChatGPT)
+
+    # Bước 0: $...$ → OMML — lỗi không làm crash toàn bộ
+    try:
+        convert_latex_in_doc(doc)
+    except Exception as e:
+        logger.error(f"convert_latex_in_doc error:\n{traceback.format_exc()}")
+
     clean_paragraph_styles(doc)
     set_page_margins(doc)
     fix_math_to_inline(doc)
@@ -1114,17 +1120,24 @@ def _process_para_latex(para):
 def convert_latex_in_doc(doc: Document):
     """
     Duyệt toàn bộ tài liệu (thân bài + ô bảng), chuyển $...$ → OMML.
+    Mỗi đoạn văn được bọc try/except riêng để lỗi không lan rộng.
     """
+    import traceback
+
+    def _safe(para):
+        try:
+            _process_para_latex(para)
+        except Exception:
+            logger.warning(f"latex para skip:\n{traceback.format_exc()}")
+
     for para in doc.paragraphs:
-        try: _process_para_latex(para)
-        except Exception as e: logger.warning(f"latex para: {e}")
+        _safe(para)
 
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for para in cell.paragraphs:
-                    try: _process_para_latex(para)
-                    except Exception as e: logger.warning(f"latex cell: {e}")
+                    _safe(para)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
