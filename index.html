@@ -556,7 +556,13 @@ async function runFormat() {
   piv1 = setInterval(() => { if (pct < 85) { pct += Math.random()*7; bar.style.width = Math.min(pct,85)+"%"; } }, 350);
   try {
     const fd = new FormData(); fd.append("file", file1);
-    const r  = await handleApiResponse(await authFetch("/process", { method:"POST", body:fd }));
+    // timeout 3 phút — Render free tier xử lý chậm
+    const ctrl = new AbortController();
+    const tOut = setTimeout(() => ctrl.abort(), 180000);
+    const r  = await handleApiResponse(
+      await authFetch("/process", { method:"POST", body:fd, signal:ctrl.signal })
+    );
+    clearTimeout(tOut);
     clearInterval(piv1); bar.style.width="100%";
     await triggerDownload(r);
     hide("load1"); show("ok1");

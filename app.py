@@ -755,25 +755,18 @@ def fix_mathtype_ole_fallback(doc):
 
 
 def process_docx(input_path, output_path):
-    wincom_tmp = input_path.replace(".docx", "_wc.docx")
-    wincom_ok  = _wincom_convert_mathtype(input_path, wincom_tmp)
-    working    = wincom_tmp if (wincom_ok and os.path.exists(wincom_tmp)) else input_path
-    try:
-        doc = Document(working)
-        clean_paragraph_styles(doc)
-        set_page_margins(doc)
-        fix_math_to_inline(doc)
-        for para in doc.paragraphs: format_paragraph(para)
-        set_table_autofit(doc)
-        format_math_runs(doc)
-        resize_inline_images(doc)
-        format_header_footer(doc)
-        fix_mathtype_ole_fallback(doc)
-        doc.save(output_path)
-    finally:
-        if wincom_ok and os.path.exists(wincom_tmp):
-            try: os.unlink(wincom_tmp)
-            except: pass
+    # win32com chỉ chạy trên Windows — bỏ qua trên Linux/Render
+    doc = Document(input_path)
+    clean_paragraph_styles(doc)
+    set_page_margins(doc)
+    fix_math_to_inline(doc)
+    for para in doc.paragraphs: format_paragraph(para)
+    set_table_autofit(doc)
+    format_math_runs(doc)
+    resize_inline_images(doc)
+    format_header_footer(doc)
+    fix_mathtype_ole_fallback(doc)
+    doc.save(output_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
