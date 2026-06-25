@@ -784,11 +784,11 @@ def process_docx(input_path, output_path):
     import traceback
     doc = Document(input_path)
 
-    # Bước 0: $...$ → OMML (tạm tắt để debug — sẽ bật lại sau khi fix)
-    # try:
-    #     convert_latex_in_doc(doc)
-    # except Exception as e:
-    #     logger.error(f"convert_latex_in_doc error:\n{traceback.format_exc()}")
+    # Bước 0: $...$ → OMML thật (từ Gemini/ChatGPT)
+    try:
+        convert_latex_in_doc(doc)
+    except Exception as e:
+        logger.error(f"convert_latex_in_doc error:\n{traceback.format_exc()}")
 
     clean_paragraph_styles(doc)
     set_page_margins(doc)
