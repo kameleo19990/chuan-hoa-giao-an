@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-echo "==> Cài thư viện hệ thống cho lxml..."
-apt-get update -qq
-apt-get install -y libxml2-dev libxslt-dev python3-dev
+echo "==> Python version: $(python --version)"
 
-echo "==> Cài Python packages..."
+echo "==> Nâng cấp pip..."
 pip install --upgrade pip
+
+echo "==> Cài lxml bản pre-built (không cần compile)..."
+pip install "lxml>=5.1.0" --prefer-binary
+
+echo "==> Cài các package còn lại..."
 pip install -r requirements.txt
 
 echo "==> Build xong!"
