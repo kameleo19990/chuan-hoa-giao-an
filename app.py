@@ -19,6 +19,7 @@ from docx.shared import Pt, Cm
 from docx.enum.text import WD_LINE_SPACING
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from lxml import etree
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("giaoan")
