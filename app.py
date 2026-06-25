@@ -1489,8 +1489,10 @@ async def process_file(
     try:
         process_docx(tmp_in_path, tmp_out_path)
     except Exception as exc:
+        import traceback
+        logger.error(f"process_docx FAILED:\n{traceback.format_exc()}")
         _cleanup(tmp_in_path)
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý: {exc}")
+        raise HTTPException(status_code=500, detail=f"Lỗi xử lý: {type(exc).__name__}: {exc}")
     background_tasks.add_task(_cleanup, tmp_in_path)
     background_tasks.add_task(_cleanup, tmp_out_path)
     stem = os.path.splitext(file.filename)[0]
