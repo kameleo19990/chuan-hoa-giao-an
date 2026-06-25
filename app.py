@@ -84,12 +84,17 @@ async def get_current_user(
     supa = _get_supa()
     if supa:
         try:
-            resp = supa.auth.get_user(token)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(supa.auth.get_user, token)
+                resp = future.result(timeout=8)   # timeout 8 giây
             if resp and resp.user:
                 return {
                     "sub":   resp.user.id,
                     "email": resp.user.email or "",
                 }
+        except concurrent.futures.TimeoutError:
+            logger.warning("get_user timeout — thử JWT fallback")
         except Exception as e:
             logger.warning(f"get_user failed: {e}")
 
@@ -140,13 +145,16 @@ def check_and_increment_quota(user_id: str) -> None:
     current_month = datetime.now(timezone.utc).strftime("%Y-%m")
 
     try:
-        r = (
-            supa.table("profiles")
-            .select("used_quota, is_pro, quota_month")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(
+                lambda: supa.table("profiles")
+                    .select("used_quota, is_pro, quota_month")
+                    .eq("id", user_id)
+                    .maybe_single()
+                    .execute()
+            )
+            r = future.result(timeout=8)   # timeout 8 giây
 
         if not r.data:
             # Profile chưa có → tạo mới với used_quota = 1
