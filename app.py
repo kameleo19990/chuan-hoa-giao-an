@@ -1613,6 +1613,240 @@ async def insert_nls_smart(
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTERACTIVE NLS — Upload Framework + Review + Inject
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def extract_text_from_upload(file_path: str, filename: str) -> str:
+    """Trích xuất văn bản từ PDF / DOCX / TXT."""
+    ext = os.path.splitext(filename.lower())[1]
+    try:
+        if ext == ".docx":
+            doc = Document(file_path)
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        elif ext in (".txt", ".md"):
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+        elif ext == ".pdf":
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                pages = [page.extract_text() or "" for page in pdf.pages]
+                return "\n".join(pages)
+    except Exception as e:
+        logger.warning(f"extract_text_from_upload: {e}")
+    return ""
+
+
+def _text_to_items(text: str) -> list:
+    """Chuyển văn bản khung NLS → danh sách checkbox item."""
+    import uuid
+    items = []
+    for line in text.splitlines():
+        line = line.strip().lstrip("•-*+○●▸▪►⁃–—").strip()
+        if len(line) > 15:
+            items.append({"id": str(uuid.uuid4())[:8], "text": line, "checked": True})
+    return items[:40]
+
+
+def build_interactive_nls(doc: Document, mon: str, cap: str, framework_text: str = "") -> dict:
+    """
+    Phân tích tài liệu → trả về cấu trúc NLS có thể chọn/sửa.
+    Nếu có framework_text (khung riêng của giáo viên) → ưu tiên dùng đó.
+    """
+    import uuid
+
+    if framework_text.strip():
+        # Dùng khung tùy chỉnh của giáo viên
+        items = _text_to_items(framework_text)
+        return {"source": "framework", "activities": [], "fallback": items, "keywords": []}
+
+    # Phân tích tiến trình bài dạy từ database
+    analysis = analyze_lesson_for_nls(doc, mon, cap)
+
+    activities = [
+        {
+            "type": act["type"],
+            "name": act["name"],
+            "items": [
+                {"id": str(uuid.uuid4())[:8], "text": nls, "checked": True}
+                for nls in act["nls"]
+            ],
+        }
+        for act in analysis["activities"]
+    ]
+    fallback = [
+        {"id": str(uuid.uuid4())[:8], "text": nls, "checked": True}
+        for nls in analysis["fallback"]
+    ]
+    return {
+        "source": "database",
+        "activities": activities,
+        "fallback": fallback,
+        "keywords": analysis.get("keywords", []),
+    }
+
+
+def inject_competence_to_docx(
+    doc: Document, selected_items: list, mon_label: str, cap_label: str
+):
+    """
+    Chèn các NLS đã được giáo viên duyệt vào file Word.
+    selected_items: [{"activity_name": str, "text": str}, ...]
+    """
+    for para in doc.paragraphs:
+        if "năng lực số" in para.text.lower():
+            logger.info("Đã có 'Năng lực số' — bỏ qua chèn trùng.")
+            return
+
+    ref_p = _find_insertion_wp(doc)
+    if ref_p is None:
+        return
+
+    # Nhóm items theo activity_name
+    from collections import OrderedDict
+    groups: OrderedDict = OrderedDict()
+    ungrouped: list = []
+    for item in selected_items:
+        act = (item.get("activity_name") or "").strip()
+        text = (item.get("text") or "").strip()
+        if not text:
+            continue
+        if act:
+            groups.setdefault(act, []).append(text)
+        else:
+            ungrouped.append(text)
+
+    # Chèn tiêu đề chính
+    header = _make_wp(
+        f"- Năng lực số tích hợp ({mon_label} – {cap_label}):", bold=True
+    )
+    current = ref_p
+    current.addnext(header)
+    current = header
+
+    # Chèn theo nhóm hoạt động
+    for act_name, texts in groups.items():
+        sub = _make_wp(f"▸ {act_name}:", bold=True, indent_twips=200)
+        current.addnext(sub)
+        current = sub
+        for text in texts:
+            row = _make_wp(f"+ {text}", indent_twips=480)
+            current.addnext(row)
+            current = row
+
+    # Chèn các mục không thuộc nhóm nào
+    for text in ungrouped:
+        row = _make_wp(f"+ {text}", indent_twips=360)
+        current.addnext(row)
+        current = row
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.post("/upload-framework")
+async def upload_framework_endpoint(file: UploadFile = File(...)):
+    """Upload file khung NLS (PDF/DOCX/TXT) và trả về văn bản đã trích xuất."""
+    allowed = {".pdf", ".docx", ".txt", ".md"}
+    ext = os.path.splitext(file.filename.lower())[1]
+    if ext not in allowed:
+        raise HTTPException(400, f"Chỉ hỗ trợ: {', '.join(sorted(allowed))}")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+    tmp.write(await file.read())
+    tmp.close()
+    try:
+        text = extract_text_from_upload(tmp.name, file.filename)
+    finally:
+        _cleanup(tmp.name)
+
+    if not text.strip():
+        raise HTTPException(422, "Không trích xuất được nội dung. Thử file khác nhé!")
+
+    return JSONResponse({"text": text, "char_count": len(text)})
+
+
+@app.post("/analyze-nls-interactive")
+async def analyze_nls_interactive_endpoint(
+    file: UploadFile = File(...),
+    mon: str = Form(...),
+    cap: str = Form(...),
+    framework_text: str = Form(""),
+    user: dict = Depends(get_current_user),
+):
+    """Phân tích bài dạy → trả về danh sách NLS dạng checkbox."""
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(400, "Chỉ hỗ trợ .docx")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp.write(await file.read())
+    tmp.close()
+    try:
+        doc    = Document(tmp.name)
+        result = build_interactive_nls(doc, mon, cap, framework_text)
+    except Exception as exc:
+        raise HTTPException(500, f"Lỗi phân tích: {exc}")
+    finally:
+        _cleanup(tmp.name)
+
+    return JSONResponse({
+        "mon": MON_LABELS.get(mon, mon),
+        "cap": CAP_LABELS.get(cap, cap),
+        **result,
+    })
+
+
+@app.post("/inject-nls-selected")
+async def inject_nls_selected_endpoint(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    mon:        str = Form(...),
+    cap:        str = Form(...),
+    items_json: str = Form(...),
+    user: dict = Depends(get_current_user),
+):
+    """Nhận danh sách NLS đã duyệt → chèn vào .docx và trả về file."""
+    import json as _json
+    _check_quota(user["sub"])
+
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(400, "Chỉ hỗ trợ .docx")
+
+    try:
+        selected = _json.loads(items_json)
+    except Exception:
+        raise HTTPException(400, "items_json không hợp lệ (phải là JSON)")
+
+    if not selected:
+        raise HTTPException(400, "Chưa chọn năng lực số nào")
+
+    tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_in_path = tmp_in.name
+    tmp_in.write(await file.read())
+    tmp_in.close()
+    tmp_out = tmp_in_path.replace(".docx", "_nls.docx")
+
+    try:
+        doc = Document(tmp_in_path)
+        inject_competence_to_docx(
+            doc, selected,
+            MON_LABELS.get(mon, mon),
+            CAP_LABELS.get(cap, cap),
+        )
+        doc.save(tmp_out)
+    except Exception as exc:
+        _cleanup(tmp_in_path)
+        raise HTTPException(500, f"Lỗi chèn NLS: {exc}")
+
+    background_tasks.add_task(_cleanup, tmp_in_path)
+    background_tasks.add_task(_cleanup, tmp_out)
+    stem = os.path.splitext(file.filename)[0]
+    return FileResponse(
+        tmp_out,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=f"{stem}_nanglucso.docx",
+    )
+
+
 if __name__ == "__main__":
     # Local development only — production dùng gunicorn (xem Procfile)
     import uvicorn

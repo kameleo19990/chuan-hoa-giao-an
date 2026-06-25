@@ -219,92 +219,172 @@
       </div>
     </div>
 
-    <!-- ── TAB 2: NĂNG LỰC SỐ ── -->
+    <!-- ── TAB 2: NĂNG LỰC SỐ (Interactive 3-step) ── -->
     <div id="pane-nls" class="hidden">
-      <div id="dz2" class="dropzone flex flex-col items-center justify-center border-2 border-dashed border-emerald-300 rounded-3xl py-8 px-6 cursor-pointer transition-all duration-300 bg-emerald-50 hover:bg-emerald-100 shadow-sm"
-        onclick="document.getElementById('fi2').click()">
-        <svg class="w-14 h-14 mb-3 text-emerald-400 animate-bounce2" viewBox="0 0 80 80" fill="none">
-          <rect x="12" y="8" width="56" height="64" rx="8" fill="#A7F3D0"/>
-          <rect x="18" y="14" width="44" height="52" rx="5" fill="#ECFDF5"/>
-          <rect x="24" y="22" width="32" height="3" rx="1.5" fill="#34D399"/>
-          <rect x="24" y="30" width="24" height="3" rx="1.5" fill="#34D399"/>
-          <rect x="24" y="38" width="28" height="3" rx="1.5" fill="#34D399"/>
-          <circle cx="60" cy="60" r="14" fill="#10B981"/>
-          <path d="M53 60l5 5 9-9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <p class="text-emerald-700 font-bold text-base text-center leading-snug">Tải lên giáo án cần bổ sung<br/>Năng lực số nhé!</p>
-        <p class="mt-1 text-xs text-gray-400 font-semibold">chỉ hỗ trợ <span class="text-emerald-500">.docx</span></p>
-        <input id="fi2" type="file" accept=".docx" class="hidden" onchange="handleFile2(event)"/>
-      </div>
-      <div id="fi2-info" class="hidden mt-3 flex items-center gap-2 bg-emerald-50 rounded-2xl px-4 py-3 border border-emerald-200">
-        <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v13a2 2 0 01-2 2z"/></svg>
-        <span id="fi2-name" class="text-emerald-700 font-bold truncate text-sm flex-1"></span>
-        <button onclick="reset2()" class="text-gray-400 hover:text-red-400 transition-colors"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
-      </div>
-      <div class="mt-4 grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Môn học</label>
-          <select id="sel-mon" class="w-full border border-emerald-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
-            <option value="">— Chọn môn —</option>
-            <option value="toan">Toán</option><option value="ngu_van">Ngữ văn</option>
-            <option value="tieng_anh">Tiếng Anh</option><option value="vat_ly">Vật lý</option>
-            <option value="hoa_hoc">Hóa học</option><option value="sinh_hoc">Sinh học</option>
-            <option value="lich_su">Lịch sử</option><option value="dia_ly">Địa lý</option>
-            <option value="gdcd">GDCD / GDKTPL</option><option value="tin_hoc">Tin học</option>
-            <option value="cong_nghe">Công nghệ</option><option value="khoa_hoc">Khoa học (TH)</option>
-            <option value="tnxh">Tự nhiên & XH (TH)</option><option value="gdtc">GDTC</option>
-            <option value="am_nhac">Âm nhạc</option><option value="my_thuat">Mỹ thuật</option>
-          </select>
+
+      <!-- ══ BƯỚC 1: Tải lên & Cấu hình ══ -->
+      <div id="nls-s1">
+
+        <!-- Dropzone giáo án -->
+        <div id="dz2" class="dropzone flex flex-col items-center justify-center border-2 border-dashed border-emerald-300 rounded-2xl py-7 px-6 cursor-pointer transition-all bg-emerald-50 hover:bg-emerald-100 shadow-sm"
+          onclick="document.getElementById('fi2').click()">
+          <svg class="w-12 h-12 mb-2 text-emerald-400 animate-bounce2" viewBox="0 0 80 80" fill="none">
+            <rect x="12" y="8" width="56" height="64" rx="8" fill="#A7F3D0"/>
+            <rect x="18" y="14" width="44" height="52" rx="5" fill="#ECFDF5"/>
+            <rect x="24" y="22" width="32" height="3" rx="1.5" fill="#34D399"/>
+            <rect x="24" y="30" width="24" height="3" rx="1.5" fill="#34D399"/>
+            <rect x="24" y="38" width="28" height="3" rx="1.5" fill="#34D399"/>
+            <circle cx="60" cy="60" r="14" fill="#10B981"/>
+            <path d="M53 60l5 5 9-9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p class="text-emerald-700 font-bold text-sm text-center">Tải lên giáo án .docx của Thầy/Cô</p>
+          <p class="mt-1 text-xs text-gray-400 font-semibold">kéo thả hoặc bấm để chọn</p>
+          <input id="fi2" type="file" accept=".docx" class="hidden" onchange="handleFile2(event)"/>
         </div>
-        <div>
-          <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Cấp học</label>
-          <select id="sel-cap" class="w-full border border-emerald-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
-            <option value="">— Chọn cấp —</option>
-            <option value="tieu_hoc">Tiểu học (Lớp 1–5)</option>
-            <option value="thcs">THCS (Lớp 6–9)</option>
-            <option value="thpt">THPT (Lớp 10–12)</option>
-          </select>
+
+        <!-- Tên file đã chọn -->
+        <div id="fi2-info" class="hidden mt-2 flex items-center gap-2 bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-200">
+          <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v13a2 2 0 01-2 2z"/></svg>
+          <span id="fi2-name" class="text-emerald-700 font-bold truncate text-xs flex-1"></span>
+          <button onclick="reset2()" class="text-gray-400 hover:text-red-400 transition-colors"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+        </div>
+
+        <!-- Môn + Cấp -->
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Môn học</label>
+            <select id="sel-mon" class="w-full border border-emerald-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
+              <option value="">— Chọn môn —</option>
+              <option value="toan">Toán</option><option value="ngu_van">Ngữ văn</option>
+              <option value="tieng_anh">Tiếng Anh</option><option value="vat_ly">Vật lý</option>
+              <option value="hoa_hoc">Hóa học</option><option value="sinh_hoc">Sinh học</option>
+              <option value="lich_su">Lịch sử</option><option value="dia_ly">Địa lý</option>
+              <option value="gdcd">GDCD / GDKTPL</option><option value="tin_hoc">Tin học</option>
+              <option value="cong_nghe">Công nghệ</option><option value="khoa_hoc">Khoa học (TH)</option>
+              <option value="tnxh">Tự nhiên & XH (TH)</option><option value="gdtc">GDTC</option>
+              <option value="am_nhac">Âm nhạc</option><option value="my_thuat">Mỹ thuật</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Cấp học</label>
+            <select id="sel-cap" class="w-full border border-emerald-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
+              <option value="">— Chọn cấp —</option>
+              <option value="tieu_hoc">Tiểu học (Lớp 1–5)</option>
+              <option value="thcs">THCS (Lớp 6–9)</option>
+              <option value="thpt">THPT (Lớp 10–12)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Khung NLS tùy chỉnh (tuỳ chọn) -->
+        <div class="mt-3">
+          <button onclick="toggleFrameworkPanel()" id="btn-fw-toggle"
+            class="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-600 transition">
+            <span>📋 Dùng khung NLS riêng của Thầy/Cô (tuỳ chọn)</span>
+            <span id="fw-arrow">▼</span>
+          </button>
+          <div id="framework-panel" class="hidden mt-2 border border-dashed border-gray-300 rounded-xl p-3 bg-gray-50">
+            <p class="text-xs text-gray-500 font-semibold mb-2">Upload file khung năng lực số (PDF / DOCX / TXT):</p>
+            <div id="dz-fw" onclick="document.getElementById('fi-fw').click()"
+              class="cursor-pointer border border-dashed border-gray-300 rounded-xl py-4 text-center hover:bg-white transition">
+              <p class="text-xs text-gray-500 font-bold">Bấm để chọn file hoặc kéo thả</p>
+              <input id="fi-fw" type="file" accept=".pdf,.docx,.txt,.md" class="hidden" onchange="handleFrameworkFile(event)"/>
+            </div>
+            <div id="fw-status" class="hidden mt-2 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+              <span class="text-green-500 text-base">✅</span>
+              <span id="fw-status-text" class="text-green-700 font-bold text-xs flex-1"></span>
+              <button onclick="clearFramework()" class="text-gray-400 hover:text-red-400 text-xs font-bold">Xóa</button>
+            </div>
+            <div id="fw-loading" class="hidden mt-2 flex items-center gap-2 px-3 py-2">
+              <div class="flex gap-1"><span class="dot bg-gray-400"></span><span class="dot bg-gray-400"></span><span class="dot bg-gray-400"></span></div>
+              <span class="text-gray-500 font-bold text-xs">Đang trích xuất nội dung...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nút phân tích -->
+        <button id="btn-analyze-i" onclick="runInteractiveAnalysis()"
+          class="hidden mt-3 w-full bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-black text-sm rounded-2xl py-3 shadow transition-all hover:scale-105 active:scale-95">
+          🔍 Phân tích & Gợi ý Năng lực số
+        </button>
+
+        <!-- Loading phân tích -->
+        <div id="nls-loading-i" class="hidden mt-3 flex items-center gap-3 bg-teal-50 rounded-xl px-4 py-3 border border-teal-200">
+          <div class="flex gap-1"><span class="dot bg-teal-400"></span><span class="dot bg-teal-400"></span><span class="dot bg-teal-400"></span></div>
+          <p class="text-teal-700 font-bold text-sm">Đang phân tích tiến trình bài dạy...</p>
+        </div>
+
+        <!-- Lỗi bước 1 -->
+        <div id="err2-s1" class="hidden mt-3 bg-red-50 rounded-xl px-4 py-3 border border-red-200">
+          <p id="err2-s1-msg" class="text-red-600 font-bold text-xs text-center"></p>
         </div>
       </div>
-      <button id="btn-analyze" onclick="runAnalyze()" class="hidden mt-4 w-full bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white font-black text-sm rounded-2xl py-3 shadow transition-all hover:scale-105 active:scale-95">
-        🔍 Phân tích tiến trình bài dạy
-      </button>
-      <div id="analyzing" class="hidden mt-3 flex items-center gap-3 bg-teal-50 rounded-2xl px-4 py-3 border border-teal-200">
-        <div class="flex gap-1"><span class="dot bg-teal-400"></span><span class="dot bg-teal-400"></span><span class="dot bg-teal-400"></span></div>
-        <p class="text-teal-700 font-bold text-sm">Đang đọc tiến trình bài dạy...</p>
-      </div>
-      <div id="kw-box" class="hidden mt-3 animate-fadein">
-        <p class="text-xs font-black text-gray-400 uppercase tracking-wide mb-1.5">Từ khóa nhận dạng:</p>
-        <div id="kw-chips" class="flex flex-wrap gap-1.5"></div>
-      </div>
-      <div id="nls-preview" class="hidden mt-4 space-y-3 animate-fadein"></div>
-      <div id="nls-fallback" class="hidden mt-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-4 animate-fadein">
-        <div class="flex items-center gap-2 mb-2">
-          <span class="text-amber-500">⚠️</span>
-          <p class="text-gray-600 font-bold text-xs">Không phát hiện cấu trúc hoạt động — hiển thị Năng lực số chung:</p>
+
+      <!-- ══ BƯỚC 2: Review + Preview ══ -->
+      <div id="nls-s2" class="hidden mt-1 animate-fadein">
+
+        <!-- Header bước 2 -->
+        <div class="flex items-center justify-between mb-3">
+          <p class="font-black text-sm text-gray-700">✏️ Chọn & chỉnh sửa Năng lực số</p>
+          <button onclick="backToStep1()" class="text-xs text-gray-400 hover:text-gray-600 font-bold transition">← Phân tích lại</button>
         </div>
-        <ul id="nls-fallback-list" class="space-y-1.5"></ul>
-      </div>
-      <div id="nls-empty" class="hidden mt-4 bg-amber-50 rounded-2xl border border-amber-200 p-4 text-center animate-fadein">
-        <p class="text-amber-600 font-bold text-sm">😅 Chưa có dữ liệu cho tổ hợp này. Thầy/Cô thử chọn môn/cấp khác nhé!</p>
-      </div>
-      <button id="btn2" onclick="runInsertNLS()" class="hidden mt-4 w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-base rounded-2xl py-4 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95">
-        📚 Chèn Năng lực số vào giáo án!
-      </button>
-      <div id="load2" class="hidden mt-4 flex flex-col items-center gap-3 bg-emerald-50 rounded-2xl px-6 py-7 border border-emerald-200">
-        <div class="flex gap-2"><span class="dot bg-emerald-400"></span><span class="dot bg-emerald-400"></span><span class="dot bg-emerald-400"></span></div>
-        <p class="text-emerald-700 font-bold text-center text-sm">Đang chèn Năng lực số vào giáo án...</p>
-      </div>
-      <div id="ok2" class="hidden mt-4 flex flex-col items-center gap-2 bg-emerald-50 rounded-2xl px-6 py-6 border border-emerald-300 animate-pop">
-        <svg class="w-12 h-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        <p class="text-emerald-700 font-black text-base">Đã chèn Năng lực số thành công!</p>
-        <p class="text-emerald-600 text-xs font-semibold">File đang tải về tự động...</p>
-        <button onclick="reset2()" class="mt-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl text-sm hover:scale-105 transition-all">Xử lý file khác</button>
-      </div>
-      <div id="err2" class="hidden mt-4 flex flex-col items-center gap-2 bg-red-50 rounded-2xl px-6 py-6 border border-red-200 animate-pop">
-        <svg class="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-        <p id="err2-msg" class="text-red-600 font-bold text-center text-xs"></p>
-        <button onclick="reset2()" class="bg-red-400 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-sm hover:scale-105 transition-all">Thử lại</button>
+
+        <!-- Layout: checklist trái + preview phải -->
+        <div class="flex flex-col gap-4">
+
+          <!-- Checklist -->
+          <div>
+            <!-- Từ khóa phát hiện -->
+            <div id="kw-box-i" class="hidden mb-2 animate-fadein">
+              <p class="text-xs font-black text-gray-400 uppercase tracking-wide mb-1">Từ khóa nhận dạng trong bài:</p>
+              <div id="kw-chips-i" class="flex flex-wrap gap-1.5"></div>
+            </div>
+
+            <!-- Danh sách checkbox theo hoạt động -->
+            <div id="nls-checklist" class="space-y-3"></div>
+
+            <!-- Thêm mục tùy chỉnh -->
+            <button onclick="addCustomItemGlobal()"
+              class="mt-2 w-full border-2 border-dashed border-gray-200 hover:border-emerald-300 text-gray-400 hover:text-emerald-600 font-bold text-xs rounded-xl py-2 transition-all">
+              + Thêm mục Năng lực số tùy chỉnh
+            </button>
+          </div>
+
+          <!-- Preview -->
+          <div class="bg-gradient-to-br from-slate-50 to-gray-50 border border-gray-200 rounded-2xl p-4">
+            <p class="font-black text-xs text-gray-500 uppercase tracking-wide mb-2">👁️ Xem trước nội dung sẽ chèn</p>
+            <div id="nls-live-preview" class="text-xs text-gray-600 leading-relaxed space-y-0.5 min-h-16">
+              <p class="text-gray-300 italic">Chọn các mục bên trên để xem trước...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nút xác nhận -->
+        <button id="btn-confirm-nls" onclick="confirmAndCreateNLS()" disabled
+          class="mt-4 w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-base rounded-2xl py-4 shadow-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100">
+          ✅ Xác nhận & Tạo file .docx
+        </button>
+
+        <!-- Loading inject -->
+        <div id="nls-loading-inject" class="hidden mt-3 flex flex-col items-center gap-2 bg-emerald-50 rounded-2xl px-6 py-5 border border-emerald-200">
+          <div class="flex gap-2"><span class="dot bg-emerald-400"></span><span class="dot bg-emerald-400"></span><span class="dot bg-emerald-400"></span></div>
+          <p class="text-emerald-700 font-bold text-sm">Đang chèn Năng lực số vào giáo án...</p>
+        </div>
+
+        <!-- Thành công -->
+        <div id="ok2" class="hidden mt-3 flex flex-col items-center gap-2 bg-emerald-50 rounded-2xl px-6 py-5 border border-emerald-300 animate-pop">
+          <svg class="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <p class="text-emerald-700 font-black text-base">Tạo file thành công!</p>
+          <p class="text-emerald-600 text-xs font-semibold">File .docx đang tải về tự động...</p>
+          <button onclick="reset2()" class="mt-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl text-sm hover:scale-105 transition-all">Xử lý file khác</button>
+        </div>
+
+        <!-- Lỗi inject -->
+        <div id="err2" class="hidden mt-3 flex flex-col items-center gap-2 bg-red-50 rounded-2xl px-6 py-5 border border-red-200 animate-pop">
+          <svg class="w-9 h-9 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+          <p id="err2-msg" class="text-red-600 font-bold text-center text-xs"></p>
+          <button onclick="resetToStep2()" class="bg-red-400 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-xs hover:scale-105 transition-all">Thử lại</button>
+        </div>
       </div>
     </div>
   </div>
@@ -528,9 +608,9 @@ async function handleApiResponse(r) {
 // ══════════════════════════════════════════════════════════════════
 function setupDnD() {
   _setupDz("dz1", f => handleFile1({ target: { files: [f] } }));
-  _setupDz("dz2", f => handleFile2({ target: { files: [f] } }));
-  document.getElementById("sel-mon").addEventListener("change", onSelectChange);
-  document.getElementById("sel-cap").addEventListener("change", onSelectChange);
+  _setupDz2();   // Tab 2 có logic riêng (framework upload, v.v.)
+  document.getElementById("sel-mon").addEventListener("change", _updateAnalyzeBtn);
+  document.getElementById("sel-cap").addEventListener("change", _updateAnalyzeBtn);
 }
 function _setupDz(id, cb) {
   const dz = document.getElementById(id);
@@ -604,102 +684,353 @@ function reset1() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// TAB 2 – NĂNG LỰC SỐ
+// TAB 2 – NĂNG LỰC SỐ TƯƠNG TÁC (3 bước)
 // ══════════════════════════════════════════════════════════════════
-let file2=null, analysisOk=false;
+let file2       = null;
+let frameworkTx = '';      // Nội dung khung NLS tùy chỉnh
+let nlsAnalysis = null;    // Kết quả phân tích từ server
+let fwOpen      = false;   // Panel framework có mở không
 
+// ── Drag & drop ────────────────────────────────────────────────────
+function _setupDz2() {
+  const dz = document.getElementById('dz2');
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) handleFile2({ target: { files: e.dataTransfer.files } });
+  });
+  const dzFw = document.getElementById('dz-fw');
+  if (dzFw) {
+    dzFw.addEventListener('dragover',  e => { e.preventDefault(); dzFw.classList.add('dragover'); });
+    dzFw.addEventListener('dragleave', () => dzFw.classList.remove('dragover'));
+    dzFw.addEventListener('drop', e => {
+      e.preventDefault(); dzFw.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFrameworkFile({ target: { files: e.dataTransfer.files } });
+    });
+  }
+}
+
+// ── Bước 1: Upload lesson file ─────────────────────────────────────
 function handleFile2(e) {
   const f = e.target.files[0];
-  if (!f?.name.toLowerCase().endsWith(".docx")) { showErr2("Chọn file .docx nhé!"); return; }
+  if (!f?.name.toLowerCase().endsWith('.docx')) {
+    _showS1Err('Thầy/Cô chọn file .docx nhé!'); return;
+  }
   file2 = f;
-  document.getElementById("fi2-name").textContent = f.name;
-  show("fi2-info"); clearAnalysis(); maybeShowAnalyzeBtn();
-  hide("load2"); hide("ok2"); hide("err2");
-}
-function onSelectChange() { clearAnalysis(); maybeShowAnalyzeBtn(); }
-function maybeShowAnalyzeBtn() {
-  const mon = document.getElementById("sel-mon").value;
-  const cap = document.getElementById("sel-cap").value;
-  if (file2 && mon && cap) show("btn-analyze"); else hide("btn-analyze");
-}
-function clearAnalysis() {
-  analysisOk=false;
-  ["btn2","kw-box","nls-preview","nls-fallback","nls-empty","analyzing"].forEach(hide);
-  document.getElementById("nls-preview").innerHTML="";
-  document.getElementById("kw-chips").innerHTML="";
-  document.getElementById("nls-fallback-list").innerHTML="";
+  document.getElementById('fi2-name').textContent = f.name;
+  show('fi2-info');
+  hide('err2-s1'); hide('nls-s2');
+  _updateAnalyzeBtn();
 }
 
-async function runAnalyze() {
+function _updateAnalyzeBtn() {
+  const mon = document.getElementById('sel-mon').value;
+  const cap = document.getElementById('sel-cap').value;
+  if (file2 && mon && cap) show('btn-analyze-i'); else hide('btn-analyze-i');
+}
+
+// ── Framework upload (tuỳ chọn) ────────────────────────────────────
+function toggleFrameworkPanel() {
+  fwOpen = !fwOpen;
+  document.getElementById('framework-panel').classList.toggle('hidden', !fwOpen);
+  document.getElementById('fw-arrow').textContent = fwOpen ? '▲' : '▼';
+}
+
+async function handleFrameworkFile(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  hide('fw-status'); show('fw-loading');
+  try {
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch('/upload-framework', { method: 'POST', body: fd });
+    hide('fw-loading');
+    if (!r.ok) { const er = await r.json(); throw new Error(er.detail || 'Lỗi'); }
+    const data = await r.json();
+    frameworkTx = data.text;
+    document.getElementById('fw-status-text').textContent =
+      `✓ Đã đọc "${f.name}" — ${data.char_count.toLocaleString()} ký tự`;
+    show('fw-status');
+  } catch(err) {
+    hide('fw-loading');
+    frameworkTx = '';
+    document.getElementById('fw-status-text').textContent = 'Lỗi: ' + err.message;
+    show('fw-status');
+  }
+}
+
+function clearFramework() {
+  frameworkTx = '';
+  document.getElementById('fi-fw').value = '';
+  hide('fw-status');
+}
+
+// ── Bước 1 → 2: Phân tích ─────────────────────────────────────────
+async function runInteractiveAnalysis() {
   if (!file2) return;
-  const mon=document.getElementById("sel-mon").value, cap=document.getElementById("sel-cap").value;
-  if (!mon||!cap) return;
-  clearAnalysis(); hide("btn-analyze"); show("analyzing");
+  const mon = document.getElementById('sel-mon').value;
+  const cap = document.getElementById('sel-cap').value;
+  if (!mon || !cap) return;
+
+  hide('btn-analyze-i'); hide('err2-s1'); show('nls-loading-i');
+
   try {
-    const fd=new FormData(); fd.append("file",file2); fd.append("mon",mon); fd.append("cap",cap);
-    const r = await fetch("/analyze-nls-flow", { method:"POST", body:fd });
-    hide("analyzing");
-    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||"Lỗi"); }
-    renderAnalysis(await r.json());
-    analysisOk=true; show("btn2"); show("btn-analyze");
-  } catch(e) {
-    hide("analyzing"); show("btn-analyze"); showErr2("Lỗi phân tích: "+e.message);
+    const fd = new FormData();
+    fd.append('file', file2);
+    fd.append('mon', mon);
+    fd.append('cap', cap);
+    fd.append('framework_text', frameworkTx);
+
+    const r = await handleApiResponse(
+      await authFetch('/analyze-nls-interactive', { method: 'POST', body: fd })
+    );
+    nlsAnalysis = await r.json();
+    hide('nls-loading-i');
+    _renderChecklist(nlsAnalysis);
+    show('nls-s2');
+  } catch(err) {
+    hide('nls-loading-i');
+    show('btn-analyze-i');
+    if (err.message !== 'quota_exceeded') _showS1Err('Lỗi phân tích: ' + err.message);
   }
 }
 
-const ACT_COLORS = {
-  khoi_dong:  {bg:"bg-yellow-50", border:"border-yellow-300", icon:"🌟", head:"text-yellow-700"},
-  hinh_thanh: {bg:"bg-blue-50",   border:"border-blue-300",   icon:"📖", head:"text-blue-700"},
-  luyen_tap:  {bg:"bg-violet-50", border:"border-violet-300", icon:"✏️", head:"text-violet-700"},
-  van_dung:   {bg:"bg-orange-50", border:"border-orange-300", icon:"🚀", head:"text-orange-700"},
-  danh_gia:   {bg:"bg-emerald-50",border:"border-emerald-300",icon:"✅", head:"text-emerald-700"},
+function backToStep1() {
+  hide('nls-s2');
+  show('btn-analyze-i');
+}
+
+function _showS1Err(msg) {
+  document.getElementById('err2-s1-msg').textContent = msg;
+  show('err2-s1');
+}
+
+// ── Render checklist ───────────────────────────────────────────────
+const ACT_CFG = {
+  khoi_dong:  { icon:'🌟', color:'yellow' },
+  hinh_thanh: { icon:'📖', color:'blue'   },
+  luyen_tap:  { icon:'✏️', color:'violet' },
+  van_dung:   { icon:'🚀', color:'orange' },
+  danh_gia:   { icon:'✅', color:'emerald'},
 };
-function renderAnalysis(data) {
+const COLOR_MAP = {
+  yellow:  { bg:'bg-yellow-50',  border:'border-yellow-200', head:'text-yellow-700' },
+  blue:    { bg:'bg-blue-50',    border:'border-blue-200',   head:'text-blue-700'   },
+  violet:  { bg:'bg-violet-50',  border:'border-violet-200', head:'text-violet-700' },
+  orange:  { bg:'bg-orange-50',  border:'border-orange-200', head:'text-orange-700' },
+  emerald: { bg:'bg-emerald-50', border:'border-emerald-200',head:'text-emerald-700'},
+  gray:    { bg:'bg-gray-50',    border:'border-gray-200',   head:'text-gray-700'   },
+};
+
+function _renderChecklist(data) {
+  const container = document.getElementById('nls-checklist');
+  container.innerHTML = '';
+
+  // Keywords
   if (data.keywords?.length) {
-    document.getElementById("kw-chips").innerHTML=data.keywords.map(k=>
-      `<span class="bg-teal-100 text-teal-700 font-bold text-xs px-2.5 py-1 rounded-full">${k}</span>`
-    ).join(""); show("kw-box");
+    document.getElementById('kw-chips-i').innerHTML = data.keywords.map(k =>
+      `<span class="bg-teal-100 text-teal-700 font-bold text-xs px-2 py-0.5 rounded-full">${k}</span>`
+    ).join('');
+    show('kw-box-i');
+  } else hide('kw-box-i');
+
+  const allItems = data.activities?.length ? data.activities : [];
+  const fallback = data.fallback || [];
+
+  if (allItems.length > 0) {
+    allItems.forEach(act => {
+      container.appendChild(_makeActivitySection(act.type, act.name, act.items));
+    });
   }
-  if (data.activities?.length) {
-    document.getElementById("nls-preview").innerHTML=data.activities.map(act=>{
-      const c=ACT_COLORS[act.type]||{bg:"bg-gray-50",border:"border-gray-200",icon:"•",head:"text-gray-700"};
-      const items=act.nls.map(s=>`<li class="flex items-start gap-1.5 text-xs text-gray-700 font-semibold"><span class="text-emerald-500 mt-0.5 flex-shrink-0">+</span><span>${s}</span></li>`).join("");
-      return `<div class="${c.bg} ${c.border} border rounded-2xl p-3"><p class="${c.head} font-black text-sm mb-1.5">${c.icon} ${act.name}</p><ul class="space-y-1.5">${items}</ul></div>`;
-    }).join(""); show("nls-preview");
-  } else if (data.fallback?.length) {
-    document.getElementById("nls-fallback-list").innerHTML=data.fallback.map(s=>
-      `<li class="flex items-start gap-1.5 text-xs text-gray-700 font-semibold"><span class="text-emerald-500 flex-shrink-0">+</span><span>${s}</span></li>`
-    ).join(""); show("nls-fallback");
-  } else show("nls-empty");
+  if (fallback.length > 0) {
+    const label = allItems.length ? 'Năng lực số bổ sung' : 'Năng lực số gợi ý';
+    container.appendChild(_makeActivitySection('', label, fallback));
+  }
+  if (!allItems.length && !fallback.length) {
+    container.innerHTML = '<p class="text-amber-600 font-bold text-xs text-center py-4">😅 Chưa có gợi ý cho tổ hợp này.</p>';
+  }
+
+  _updatePreview();
 }
 
-async function runInsertNLS() {
-  if (!file2||!analysisOk) return;
-  const mon=document.getElementById("sel-mon").value, cap=document.getElementById("sel-cap").value;
-  hide("btn2"); hide("btn-analyze"); hide("fi2-info"); hide("err2"); show("load2");
+function _makeActivitySection(type, name, items) {
+  const cfg = ACT_CFG[type] || { icon:'📌', color:'gray' };
+  const cl  = COLOR_MAP[cfg.color];
+  const sec = document.createElement('div');
+  sec.className = `activity-section ${cl.bg} ${cl.border} border rounded-2xl p-3`;
+  sec.dataset.activityName = name;
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'flex items-center justify-between mb-2';
+  hdr.innerHTML = `
+    <p class="${cl.head} font-black text-xs">${cfg.icon} ${name}</p>
+    <button onclick="addCustomItem(this.closest('.activity-section'))"
+      class="text-xs ${cl.head} opacity-60 hover:opacity-100 font-bold transition">+ Thêm</button>`;
+  sec.appendChild(hdr);
+
+  // Items
+  const itemsWrap = document.createElement('div');
+  itemsWrap.className = 'space-y-1.5';
+  items.forEach(item => itemsWrap.appendChild(_makeCheckItem(item, name)));
+  sec.appendChild(itemsWrap);
+  return sec;
+}
+
+function _makeCheckItem(item, actName) {
+  const div = document.createElement('div');
+  div.className = 'nls-item group flex items-start gap-2 bg-white border border-gray-100 rounded-xl px-2.5 py-1.5';
+  div.dataset.activityName = actName;
+  div.innerHTML = `
+    <input type="checkbox" ${item.checked !== false ? 'checked' : ''}
+      class="nls-cb mt-0.5 flex-shrink-0 w-3.5 h-3.5 accent-emerald-500 cursor-pointer">
+    <span contenteditable="true"
+      class="item-text flex-1 text-xs text-gray-700 font-semibold outline-none min-w-0
+             focus:border-b focus:border-emerald-400 cursor-text">${_esc(item.text)}</span>
+    <button onclick="this.closest('.nls-item').remove();_updatePreview()"
+      class="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition flex-shrink-0 mt-0.5">
+      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>`;
+  div.querySelector('.nls-cb').addEventListener('change', _updatePreview);
+  div.querySelector('.item-text').addEventListener('input', _updatePreview);
+  return div;
+}
+
+function addCustomItem(section) {
+  const wrap = section.querySelector('.space-y-1.5') || section;
+  const actName = section.dataset.activityName || '';
+  wrap.appendChild(_makeCheckItem({ text:'Nhập nội dung năng lực số...', checked:true }, actName));
+  _updatePreview();
+  // Focus vào ô vừa thêm
+  const newSpan = wrap.lastChild.querySelector('.item-text');
+  newSpan?.focus();
+  document.execCommand('selectAll', false, null);
+}
+
+function addCustomItemGlobal() {
+  const container = document.getElementById('nls-checklist');
+  let lastSection = container.querySelector('.activity-section:last-of-type');
+  if (!lastSection) {
+    // Tạo section mới
+    lastSection = document.createElement('div');
+    lastSection.className = 'activity-section bg-gray-50 border border-gray-200 rounded-2xl p-3';
+    lastSection.dataset.activityName = 'Năng lực số tùy chỉnh';
+    lastSection.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-gray-700 font-black text-xs">📌 Năng lực số tùy chỉnh</p>
+      </div>
+      <div class="space-y-1.5"></div>`;
+    container.appendChild(lastSection);
+  }
+  addCustomItem(lastSection);
+}
+
+// ── Live preview ───────────────────────────────────────────────────
+function _updatePreview() {
+  const mon = nlsAnalysis?.mon || document.getElementById('sel-mon').value;
+  const cap = nlsAnalysis?.cap || document.getElementById('sel-cap').value;
+  const preview = document.getElementById('nls-live-preview');
+
+  // Thu thập items theo nhóm
+  const groups = new Map();
+  document.querySelectorAll('.activity-section').forEach(sec => {
+    const actName = sec.dataset.activityName || '';
+    const texts = [];
+    sec.querySelectorAll('.nls-item').forEach(item => {
+      if (item.querySelector('.nls-cb')?.checked) {
+        const t = (item.querySelector('.item-text')?.textContent || '').trim();
+        if (t && t !== 'Nhập nội dung năng lực số...') texts.push(t);
+      }
+    });
+    if (texts.length) groups.set(actName, texts);
+  });
+
+  if (!groups.size) {
+    preview.innerHTML = '<p class="text-gray-300 text-xs italic">Chọn ít nhất một mục để xem trước...</p>';
+    document.getElementById('btn-confirm-nls').disabled = true;
+    return;
+  }
+
+  let html = `<p class="font-bold text-gray-700 mb-1">- Năng lực số tích hợp (${mon} – ${cap}):</p>`;
+  groups.forEach((texts, actName) => {
+    if (actName) html += `<p class="font-bold text-gray-600 ml-2 mt-1">▸ ${actName}:</p>`;
+    texts.forEach(t => { html += `<p class="text-gray-500 ml-6">+ ${t}</p>`; });
+  });
+  preview.innerHTML = html;
+  document.getElementById('btn-confirm-nls').disabled = false;
+}
+
+// ── Bước 3: Xác nhận & inject ─────────────────────────────────────
+async function confirmAndCreateNLS() {
+  const mon = document.getElementById('sel-mon').value;
+  const cap = document.getElementById('sel-cap').value;
+
+  // Thu thập tất cả item đang được check
+  const selected = [];
+  document.querySelectorAll('.activity-section').forEach(sec => {
+    const actName = sec.dataset.activityName || '';
+    sec.querySelectorAll('.nls-item').forEach(item => {
+      if (item.querySelector('.nls-cb')?.checked) {
+        const t = (item.querySelector('.item-text')?.textContent || '').trim();
+        if (t && t !== 'Nhập nội dung năng lực số...') {
+          selected.push({ activity_name: actName, text: t });
+        }
+      }
+    });
+  });
+
+  if (!selected.length) return;
+
+  hide('btn-confirm-nls'); hide('err2'); show('nls-loading-inject');
+
   try {
-    const fd=new FormData(); fd.append("file",file2); fd.append("mon",mon); fd.append("cap",cap);
-    const r=await handleApiResponse(await authFetch("/insert-nls-smart",{method:"POST",body:fd}));
+    const fd = new FormData();
+    fd.append('file', file2);
+    fd.append('mon', mon);
+    fd.append('cap', cap);
+    fd.append('items_json', JSON.stringify(selected));
+
+    const r = await handleApiResponse(
+      await authFetch('/inject-nls-selected', { method: 'POST', body: fd })
+    );
     await triggerDownload(r);
-    hide("load2"); show("ok2");
+    hide('nls-loading-inject'); show('ok2');
     await loadUserInfo();
-  } catch(e) {
-    hide("load2");
-    if (e.message!=="quota_exceeded") showErr2("Có lỗi: "+e.message);
-    else { show("btn2"); show("btn-analyze"); }
+  } catch(err) {
+    hide('nls-loading-inject');
+    show('btn-confirm-nls');
+    if (err.message !== 'quota_exceeded') {
+      document.getElementById('err2-msg').textContent = 'Lỗi: ' + err.message;
+      show('err2');
+    }
   }
 }
-function showErr2(m){document.getElementById("err2-msg").textContent=m;show("err2");}
-function reset2(){
-  file2=null;analysisOk=false;
-  document.getElementById("fi2").value="";
-  document.getElementById("sel-mon").value="";
-  document.getElementById("sel-cap").value="";
-  ["fi2-info","btn-analyze","btn2","analyzing","load2","ok2","err2",
-   "kw-box","nls-preview","nls-fallback","nls-empty"].forEach(hide);
-  document.getElementById("nls-preview").innerHTML="";
-  document.getElementById("kw-chips").innerHTML="";
-  document.getElementById("nls-fallback-list").innerHTML="";
+
+function resetToStep2() {
+  hide('err2'); hide('ok2'); hide('nls-loading-inject');
+  show('btn-confirm-nls');
+}
+
+function reset2() {
+  file2 = null; frameworkTx = ''; nlsAnalysis = null; fwOpen = false;
+  document.getElementById('fi2').value = '';
+  document.getElementById('fi-fw').value = '';
+  document.getElementById('sel-mon').value = '';
+  document.getElementById('sel-cap').value = '';
+  document.getElementById('nls-checklist').innerHTML = '';
+  document.getElementById('nls-live-preview').innerHTML =
+    '<p class="text-gray-300 text-xs italic">Chọn ít nhất một mục để xem trước...</p>';
+  document.getElementById('framework-panel').classList.add('hidden');
+  document.getElementById('fw-arrow').textContent = '▼';
+  ['fi2-info','btn-analyze-i','err2-s1','nls-loading-i','nls-s2',
+   'fw-status','fw-loading','kw-box-i','ok2','err2','nls-loading-inject'].forEach(hide);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function _esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ══════════════════════════════════════════════════════════════════
