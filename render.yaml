@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: chuan-hoa-giao-an
+    runtime: python
+    region: singapore          # gần Việt Nam nhất
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -k uvicorn.workers.UvicornWorker app:app --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: SUPABASE_URL
+        sync: false            # điền thủ công trên Render dashboard
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: FREE_QUOTA
+        value: "2"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
