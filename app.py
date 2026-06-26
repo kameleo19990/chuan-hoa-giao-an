@@ -1957,21 +1957,66 @@ def _suggest_codes_from_lesson(
                     seen.add(code)
                     scored.append((120, code))  # Rất ưu tiên — đặc thù môn + nội dung
 
-    # ── Bước 3: Sắp xếp và lấy top ──────────────────────────────────────────
+    # ── Bước 3: Đối chiếu MÔ TẢ CHỈ BÁO (pass thứ 2) ─────────────────────────
+    # So sánh từ vựng hoạt động với MÔ TẢ của từng mã trong BANG_TRA_CUU.
+    # Mã PHẢI tồn tại trong BANG_TRA_CUU_MAP — tuyệt đối không bịa thêm.
+    act_words = {w for w in text_norm.split() if len(w) > 4}
+    for entry in BANG_TRA_CUU:
+        code = entry["code"]
+        if code in seen:
+            continue                      # đã được đưa vào từ pass 1
+        if code not in BANG_TRA_CUU_MAP:
+            continue                      # bảo vệ kép: chỉ mã hợp lệ
+
+        desc_norm  = _norm(entry["content"])
+        desc_words = {w for w in desc_norm.split() if len(w) > 4}
+        overlap    = len(act_words & desc_words)
+
+        if overlap < 2:                   # cần ít nhất 2 từ khóa trùng khớp
+            continue
+
+        seen.add(code)
+        subj_bonus = (
+            60 if code in priority_codes else
+            (30 if any(code.startswith(s) for s in priority_secs) else 0)
+        )
+        scored.append((float(overlap * 5) + subj_bonus, code))
+
+    # ── Bước 4: Sắp xếp, lấy top và xây kết quả ─────────────────────────────
     scored.sort(key=lambda x: -x[0])
     top_codes = [code for _, code in scored[:max_codes]]
 
     result: list[dict] = []
     for code in top_codes:
-        entry = BANG_TRA_CUU_MAP[code]
-        tools = CODE_TO_TOOLS.get(code, [])
+        # Xác nhận lần cuối: mã PHẢI trong BANG_TRA_CUU_MAP
+        if code not in BANG_TRA_CUU_MAP:
+            logger.warning(f"_suggest: bỏ qua mã không hợp lệ '{code}'")
+            continue
+
+        entry   = BANG_TRA_CUU_MAP[code]
+        tools   = CODE_TO_TOOLS.get(code, [])
+        content = entry["content"]
+
+        # Xây explanation ngắn gọn
+        match_kws = [kw for kw in KEYWORD_TO_NLS_CODES
+                     if code in KEYWORD_TO_NLS_CODES[kw]
+                     and _norm(kw) in text_norm]
+        if match_kws:
+            why = f"Hoạt động chứa '{match_kws[0]}' → phù hợp chỉ báo này"
+        else:
+            common = act_words & {w for w in _norm(content).split() if len(w) > 4}
+            why = f"Từ khóa chung: {', '.join(list(common)[:3])}" if common else "Ưu tiên theo môn học"
+
         result.append({
-            "id":      str(uuid.uuid4())[:8],
-            "code":    code,
-            "text":    f"{code} – {entry['content']}",
-            "tools":   tools,
-            "checked": True,
-            "section": entry["section"],
+            "id":          str(uuid.uuid4())[:8],
+            "code":        code,
+            "text":        f"{code} – {content}",
+            "description": content,         # mô tả gốc từ BANG_TRA_CUU
+            "explanation": why,             # lý do chọn mã này
+            "tools":       tools,
+            "checked":     True,
+            "section":     entry["section"],
+            "category":    entry["category"],
         })
     return result
 
@@ -2532,7 +2577,114 @@ def inject_competence_to_docx(
         logger.info("Không tìm thấy bảng 'Tổ chức thực hiện' — bỏ qua.")
 
 
+# ── JSON builder cho format nghiêm ngặt ──────────────────────────────────────
+
+def _build_activity_nls_json(
+    activity_name: str, activity_text: str, mon: str = ""
+) -> dict:
+    """
+    Phân tích một hoạt động và trả về JSON chuẩn:
+    {activity_name, selected_codes: [{code, description}], explanation}
+
+    Chỉ dùng mã có trong BANG_TRA_CUU_MAP.
+    Tuyệt đối không bịa mã mới.
+    """
+    text_norm = _norm(activity_text)
+    items     = _suggest_codes_from_lesson(text_norm, max_codes=3, mon=mon)
+
+    selected_codes = []
+    reasons: list[str] = []
+
+    for item in items:
+        code = item["code"]
+        # Xác nhận lại mã hợp lệ trong BANG_TRA_CUU
+        if code not in BANG_TRA_CUU_MAP:
+            continue
+        selected_codes.append({
+            "code":        code,
+            "description": item["description"],
+            "section":     item["section"],
+            "category":    item["category"],
+        })
+        reasons.append(f"{code}: {item.get('explanation', '')}")
+
+    mon_name = MON_LABELS.get(mon, mon) if mon else "môn học"
+    if selected_codes:
+        expl = (
+            f"Với môn {mon_name}, đã phân tích nội dung hoạt động và đối chiếu "
+            f"với bảng tra cứu NLS. Chọn {len(selected_codes)} mã phù hợp nhất: "
+            + "; ".join(reasons[:3])
+        )
+    else:
+        expl = (
+            f"Hoạt động này không tích hợp được năng lực số cụ thể nào "
+            f"từ bảng tra cứu bang-tra-cuu-nls-cua-hs.pdf."
+        )
+
+    return {
+        "activity_name":  activity_name,
+        "selected_codes": selected_codes,
+        "explanation":    expl,
+    }
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.post("/analyze-nls-strict")
+async def analyze_nls_strict_endpoint(
+    file: UploadFile = File(...),
+    mon:  str = Form(""),
+    cap:  str = Form(""),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Phân tích giáo án và trả về mã NLS chính xác theo JSON format.
+
+    - Chỉ dùng mã từ bang-tra-cuu-nls-cua-hs.pdf (109 mã).
+    - Mỗi hoạt động trả về: {activity_name, selected_codes, explanation}.
+    - selected_codes = [] nếu không tìm thấy mã phù hợp.
+    """
+    uid = user["sub"]
+    logger.info(f"analyze-nls-strict: user={uid}, file={file.filename}, mon={mon}")
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(400, "Chỉ hỗ trợ .docx")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp.write(await file.read()); tmp.close()
+    results: list[dict] = []
+
+    try:
+        doc      = Document(tmp.name)
+        detected = mon or _detect_subject_from_doc(doc)
+        acts     = _extract_activities_with_nls(doc, mon=detected)
+
+        if not acts:
+            # Không phát hiện được hoạt động cụ thể → phân tích toàn bài
+            full_text = extract_doc_text(doc)
+            results.append(_build_activity_nls_json(
+                "Toàn bộ bài dạy", full_text, mon=detected
+            ))
+        else:
+            for act in acts:
+                act_text = act.get("content", act.get("name", ""))
+                result   = _build_activity_nls_json(
+                    act["name"], act_text, mon=detected
+                )
+                results.append(result)
+
+    except Exception as exc:
+        raise HTTPException(500, f"Lỗi phân tích: {exc}")
+    finally:
+        _cleanup(tmp.name)
+
+    return JSONResponse({
+        "source":     "bang-tra-cuu-nls-cua-hs.pdf",
+        "mon":        MON_LABELS.get(mon, mon),
+        "cap":        CAP_LABELS.get(cap, cap),
+        "activities": results,
+        "total_codes_available": len(BANG_TRA_CUU),
+    })
+
 
 @app.get("/nls-codes")
 async def get_nls_codes():
