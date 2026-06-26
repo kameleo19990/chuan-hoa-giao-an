@@ -3058,19 +3058,49 @@ async def _call_gemini_5512(doc_text: str, mon: str, cap: str) -> dict:
     """
     from google import genai as _genai
     import json as _json
+    import asyncio as _asyncio
 
     client = _genai.Client(api_key=GEMINI_API_KEY)
     prompt = _build_5512_prompt(doc_text, mon, cap)
 
-    try:
-        response = client.models.generate_content(
-            model    = "gemini-2.0-flash",
-            contents = prompt,
+    # Thử lần lượt các model — nếu quota hết thì đổi sang model khác
+    MODELS_TO_TRY = [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+    ]
+    raw = None
+    last_err = None
+
+    for model_name in MODELS_TO_TRY:
+        try:
+            logger.info(f"Gemini: thử model '{model_name}'")
+            response = client.models.generate_content(
+                model    = model_name,
+                contents = prompt,
+            )
+            raw = response.text.strip()
+            logger.info(f"Gemini: thành công với '{model_name}'")
+            break
+        except Exception as e:
+            es = str(e)
+            last_err = e
+            if "429" in es or "RESOURCE_EXHAUSTED" in es or "quota" in es.lower():
+                logger.warning(f"Gemini quota hết cho '{model_name}' — thử model tiếp theo")
+                await _asyncio.sleep(2)   # chờ 2s trước khi thử model khác
+                continue
+            # Lỗi khác (không phải quota) → báo ngay
+            logger.error(f"Gemini API error ({model_name}): {e}")
+            raise HTTPException(500, f"Gemini API lỗi: {e}")
+
+    if raw is None:
+        raise HTTPException(
+            503,
+            "Gemini API đã hết quota miễn phí cho tất cả model. "
+            "Vui lòng vào https://aistudio.google.com → chọn project → "
+            "Enable Billing (vẫn miễn phí ở mức nhỏ), hoặc thử lại sau 1 phút."
         )
-        raw = response.text.strip()
-    except Exception as e:
-        logger.error(f"Gemini API error: {e}")
-        raise HTTPException(500, f"Gemini API lỗi: {e}")
 
     # Bóc JSON từ response
     import re as _re
