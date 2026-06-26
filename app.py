@@ -2958,6 +2958,169 @@ async def analyze_nls_strict_endpoint(
     })
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CHUẨN HÓA 5512 — Claude API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+_5512_STEPS = {
+    "buoc_1": "Bước 1: Xác định vấn đề / Nhiệm vụ học tập",
+    "buoc_2": "Bước 2: Nghiên cứu kiến thức mới / Thực hiện nhiệm vụ",
+    "buoc_3": "Bước 3: Luyện tập",
+    "buoc_4": "Bước 4: Vận dụng",
+}
+
+
+def _build_nls_reference() -> str:
+    """Xây chuỗi tham chiếu 109 mã NLS dạng compact cho prompt Claude."""
+    lines = []
+    for item in BANG_TRA_CUU:
+        lines.append(f"{item['code']}: {item['content']}")
+    return "\n".join(lines)
+
+
+def _build_5512_prompt(doc_text: str, mon: str, cap: str) -> str:
+    """Xây prompt yêu cầu Claude phân tích giáo án → JSON chuẩn 5512 + NLS."""
+    mon_name  = MON_LABELS.get(mon, mon) or "môn học"
+    cap_name  = CAP_LABELS.get(cap, cap) or ""
+    nls_ref   = _build_nls_reference()
+
+    return f"""Bạn là chuyên gia giáo dục phổ thông Việt Nam, thành thạo Công văn 5512/BGDĐT.
+
+NHIỆM VỤ: Phân tích giáo án {mon_name}{' – ' + cap_name if cap_name else ''} dưới đây và trả về JSON chuẩn.
+
+═══ QUY TRÌNH ═══
+1. Xác định tên bài học.
+2. Phân loại toàn bộ hoạt động dạy học vào đúng 4 bước theo Công văn 5512:
+   - buoc_1: Xác định vấn đề / Nhiệm vụ học tập  (Khởi động, Mở đầu, Tạo tình huống)
+   - buoc_2: Nghiên cứu kiến thức mới / Thực hiện nhiệm vụ  (Hình thành kiến thức)
+   - buoc_3: Luyện tập  (Thực hành, Củng cố)
+   - buoc_4: Vận dụng  (Ứng dụng, Sáng tạo, Mở rộng)
+3. Giữ NGUYÊN VẸN nội dung chuyên môn gốc — KHÔNG xóa, KHÔNG viết lại.
+4. Với mỗi bước, xác định xem có hoạt động nào sử dụng CÔNG CỤ SỐ không
+   (phần mềm, ứng dụng, internet, video, thiết bị số...).
+5. Nếu có → chọn tối đa 2–3 mã NLS PHÙ HỢP NHẤT từ BẢNG MÃ bên dưới.
+   TUYỆT ĐỐI không bịa mã ngoài danh sách. Nếu không có hoạt động số → nls = [].
+
+═══ BẢNG MÃ NLS (chỉ được dùng các mã này) ═══
+{nls_ref}
+
+═══ ĐỊNH DẠNG JSON TRẢ VỀ (JSON thuần, không markdown) ═══
+{{
+  "mon": "{mon_name}",
+  "cap": "{cap_name}",
+  "ten_bai": "...",
+  "buoc_1": {{
+    "ten_buoc": "Xác định vấn đề / Nhiệm vụ học tập",
+    "noi_dung": "...(giữ nguyên nội dung gốc, có thể gộp nhiều hoạt động)...",
+    "nls": [
+      {{
+        "ma": "1.1TC1a",
+        "mo_ta": "Giải thích được nhu cầu thông tin",
+        "cong_cu": "Tên công cụ số phù hợp với hoạt động cụ thể"
+      }}
+    ]
+  }},
+  "buoc_2": {{ "ten_buoc": "...", "noi_dung": "...", "nls": [] }},
+  "buoc_3": {{ "ten_buoc": "...", "noi_dung": "...", "nls": [] }},
+  "buoc_4": {{ "ten_buoc": "...", "noi_dung": "...", "nls": [] }}
+}}
+
+═══ GIÁO ÁN GỐC ═══
+{doc_text[:12000]}
+"""
+
+
+async def _call_claude_5512(doc_text: str, mon: str, cap: str) -> dict:
+    """Gọi Claude API để phân tích và chuẩn hóa giáo án theo 5512."""
+    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY.startswith("sk-ant-..."):
+        raise HTTPException(
+            503,
+            "ANTHROPIC_API_KEY chưa được cấu hình. "
+            "Thêm vào file .env rồi restart server."
+        )
+
+    import anthropic as _ant
+    import json as _json
+
+    client = _ant.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    prompt = _build_5512_prompt(doc_text, mon, cap)
+
+    message = await client.messages.create(
+        model  = "claude-sonnet-4-6",
+        max_tokens = 4096,
+        messages   = [{"role": "user", "content": prompt}],
+    )
+
+    raw = message.content[0].text.strip()
+
+    # Bóc JSON từ response (phòng trường hợp có markdown wrapper)
+    import re as _re
+    m = _re.search(r'\{[\s\S]*\}', raw)
+    if m:
+        raw = m.group()
+
+    try:
+        result = _json.loads(raw)
+    except _json.JSONDecodeError as e:
+        logger.error(f"Claude JSON parse error: {e}\nRaw: {raw[:500]}")
+        raise HTTPException(500, "Claude trả về JSON không hợp lệ. Thử lại.")
+
+    # Validate: mã NLS phải có trong BANG_TRA_CUU_MAP
+    for step_key in ("buoc_1", "buoc_2", "buoc_3", "buoc_4"):
+        step = result.get(step_key, {})
+        valid_nls = []
+        for item in step.get("nls", []):
+            code = (item.get("ma") or "").strip()
+            if code in BANG_TRA_CUU_MAP:
+                item["mo_ta"] = BANG_TRA_CUU_MAP[code]["content"]  # dùng mô tả chuẩn
+                valid_nls.append(item)
+            else:
+                logger.warning(f"Bỏ mã NLS không hợp lệ: '{code}'")
+        step["nls"] = valid_nls
+
+    return result
+
+
+@app.post("/convert-5512")
+async def convert_5512_endpoint(
+    file: UploadFile = File(...),
+    mon:  str = Form(""),
+    cap:  str = Form(""),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Phân tích giáo án thô (.docx) → JSON chuẩn Công văn 5512 + NLS.
+    Sử dụng Claude API (claude-sonnet-4-6) — cần ANTHROPIC_API_KEY.
+    """
+    uid = user["sub"]
+    logger.info(f"convert-5512: user={uid}, file={file.filename}, mon={mon}")
+
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(400, "Chỉ hỗ trợ file .docx")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp.write(await file.read()); tmp.close()
+
+    try:
+        doc      = Document(tmp.name)
+        doc_text = extract_doc_text(doc)
+        if not doc_text.strip():
+            raise HTTPException(422, "Không đọc được nội dung file.")
+
+        result = await _call_claude_5512(doc_text, mon, cap)
+        return JSONResponse(result)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"convert-5512 error: {exc}", exc_info=True)
+        raise HTTPException(500, f"Lỗi phân tích: {exc}")
+    finally:
+        _cleanup(tmp.name)
+
+
 @app.get("/nls-codes")
 async def get_nls_codes():
     """

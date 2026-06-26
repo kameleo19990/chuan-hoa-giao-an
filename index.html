@@ -165,6 +165,11 @@
         class="tab-btn flex-1 py-3 px-4 font-black text-sm text-gray-400 border-transparent transition-all hover:text-emerald-600">
         📚 Năng lực số
       </button>
+      <div class="w-px bg-blue-100"></div>
+      <button id="tab-5512" onclick="switchTab('5512')"
+        class="tab-btn flex-1 py-3 px-4 font-black text-sm text-gray-400 border-transparent transition-all hover:text-purple-600">
+        📋 Chuẩn 5512
+      </button>
     </div>
   </div>
 
@@ -391,6 +396,95 @@
     </div>
   </div>
 
+    <!-- ══ TAB 3: CHUẨN HÓA 5512 ══ -->
+    <div id="pane-5512" class="hidden">
+
+      <!-- Dropzone -->
+      <div id="dz5512" class="dropzone flex flex-col items-center justify-center border-2 border-dashed border-purple-300 rounded-2xl py-7 px-6 cursor-pointer transition-all bg-purple-50 hover:bg-purple-100 shadow-sm"
+        onclick="document.getElementById('fi5512').click()">
+        <svg class="w-12 h-12 mb-2 text-purple-400 animate-bounce2" fill="none" viewBox="0 0 80 80">
+          <rect x="12" y="8" width="56" height="64" rx="8" fill="#E9D5FF"/>
+          <rect x="18" y="14" width="44" height="52" rx="5" fill="#F5F3FF"/>
+          <rect x="24" y="22" width="32" height="3" rx="1.5" fill="#C084FC"/>
+          <rect x="24" y="30" width="24" height="3" rx="1.5" fill="#C084FC"/>
+          <rect x="24" y="38" width="28" height="3" rx="1.5" fill="#C084FC"/>
+          <rect x="24" y="46" width="18" height="3" rx="1.5" fill="#C084FC"/>
+          <circle cx="60" cy="60" r="14" fill="#9333EA"/>
+          <path d="M53 60l5 5 9-9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="text-purple-700 font-bold text-sm text-center">Tải lên giáo án thô cần chuẩn hóa<br/>theo Công văn 5512</p>
+        <p class="mt-1 text-xs text-gray-400 font-semibold">chỉ hỗ trợ <span class="text-purple-500">.docx</span></p>
+        <input id="fi5512" type="file" accept=".docx" class="hidden" onchange="handle5512File(event)"/>
+      </div>
+
+      <!-- Tên file -->
+      <div id="fi5512-info" class="hidden mt-2 flex items-center gap-2 bg-purple-50 rounded-xl px-3 py-2 border border-purple-200">
+        <svg class="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v13a2 2 0 01-2 2z"/></svg>
+        <span id="fi5512-name" class="text-purple-700 font-bold truncate text-xs flex-1"></span>
+        <button onclick="reset5512()" class="text-gray-400 hover:text-red-400 transition-colors"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      </div>
+
+      <!-- Môn + Cấp -->
+      <div class="mt-3 grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Môn học</label>
+          <select id="sel-mon-5512" class="w-full border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 transition">
+            <option value="">— Chọn môn —</option>
+            <option value="toan">Toán</option><option value="ngu_van">Ngữ văn</option>
+            <option value="tieng_anh">Tiếng Anh</option><option value="vat_ly">Vật lý</option>
+            <option value="hoa_hoc">Hóa học</option><option value="sinh_hoc">Sinh học</option>
+            <option value="lich_su">Lịch sử</option><option value="dia_ly">Địa lý</option>
+            <option value="gdcd">GDCD</option><option value="tin_hoc">Tin học</option>
+            <option value="cong_nghe">Công nghệ</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wide">Cấp học</label>
+          <select id="sel-cap-5512" class="w-full border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 transition">
+            <option value="">— Chọn cấp —</option>
+            <option value="tieu_hoc">Tiểu học</option>
+            <option value="thcs">THCS</option>
+            <option value="thpt">THPT</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Nút phân tích -->
+      <button id="btn5512-analyze" onclick="run5512Analysis()" class="hidden mt-3 w-full bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white font-black text-sm rounded-2xl py-3 shadow transition-all hover:scale-105 active:scale-95">
+        🤖 Phân tích & Chuẩn hóa theo 5512
+      </button>
+
+      <!-- Loading -->
+      <div id="load5512" class="hidden mt-3 flex flex-col items-center gap-2 bg-purple-50 rounded-xl px-4 py-5 border border-purple-200">
+        <div class="flex gap-1"><span class="dot bg-purple-400"></span><span class="dot bg-purple-400"></span><span class="dot bg-purple-400"></span></div>
+        <p class="text-purple-700 font-bold text-sm text-center">Claude AI đang phân tích và chuẩn hóa giáo án<br/>theo Công văn 5512...</p>
+        <p class="text-purple-500 text-xs">Quá trình này mất 15-30 giây</p>
+      </div>
+
+      <!-- Kết quả JSON -->
+      <div id="result5512" class="hidden mt-3 animate-fadein">
+        <div class="flex items-center justify-between mb-2">
+          <p class="font-black text-sm text-purple-700">📋 Kết quả phân tích 5512</p>
+          <button onclick="copy5512JSON()" class="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold px-3 py-1 rounded-lg transition">Copy JSON</button>
+        </div>
+
+        <!-- 4 bước -->
+        <div id="steps5512" class="space-y-3"></div>
+
+        <!-- Download -->
+        <button onclick="download5512JSON()" class="mt-3 w-full bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white font-black text-sm rounded-2xl py-3 shadow transition-all hover:scale-105 active:scale-95">
+          ⬇️ Tải JSON để điền vào template Word
+        </button>
+        <button onclick="reset5512()" class="mt-2 w-full text-purple-500 hover:text-purple-700 font-bold text-xs py-2 transition">Phân tích file khác</button>
+      </div>
+
+      <!-- Lỗi -->
+      <div id="err5512" class="hidden mt-3 bg-red-50 rounded-xl px-4 py-4 border border-red-200 animate-pop">
+        <p id="err5512-msg" class="text-red-600 font-bold text-xs text-center"></p>
+        <button onclick="reset5512()" class="mt-2 block mx-auto bg-red-400 hover:bg-red-500 text-white font-bold px-4 py-1.5 rounded-lg text-xs hover:scale-105 transition-all">Thử lại</button>
+      </div>
+    </div>
+
   <!-- Feature chips -->
   <div class="mt-5 flex flex-wrap justify-center gap-2 animate-fadein">
     <span class="bg-white border border-blue-100 shadow-sm text-blue-600 font-bold text-xs px-3 py-1.5 rounded-full">📐 Căn lề A4</span>
@@ -498,6 +592,7 @@ async function onLoggedIn(session) {
   show("main-app");
   await loadUserInfo();
   setupDnD();
+  setupDnD5512();            // Tab 3: Chuẩn hóa 5512
   _loadFrameworkFromLS();    // Nạp codes từ localStorage (nếu có file custom)
   await _loadBTCCodes();     // Luôn load 109 mã từ bảng tra cứu chuẩn
 }
@@ -650,17 +745,22 @@ function _setupDz(id, cb) {
 }
 
 function switchTab(t) {
-  ["fmt","nls"].forEach(id => {
+  const TAB_COLORS = {
+    fmt:   { text: "text-blue-600",    border: "border-blue-500"    },
+    nls:   { text: "text-emerald-600", border: "border-emerald-500" },
+    "5512":{ text: "text-purple-600",  border: "border-purple-500"  },
+  };
+  ["fmt","nls","5512"].forEach(id => {
     const isActive = id === t;
-    document.getElementById("pane-"+id).classList.toggle("hidden", !isActive);
+    document.getElementById("pane-"+id)?.classList.toggle("hidden", !isActive);
     const btn = document.getElementById("tab-"+id);
+    if (!btn) return;
     btn.classList.toggle("active", isActive);
-    btn.classList.toggle("text-blue-600",    id==="fmt" && isActive);
-    btn.classList.toggle("text-emerald-600", id==="nls" && isActive);
-    btn.classList.toggle("text-gray-400",    !isActive);
-    btn.classList.toggle("border-blue-500",    id==="fmt" && isActive);
-    btn.classList.toggle("border-emerald-500", id==="nls" && isActive);
-    btn.classList.toggle("border-transparent", !isActive);
+    const c = TAB_COLORS[id] || {};
+    btn.classList.toggle(c.text || "text-blue-600",    isActive);
+    btn.classList.toggle("text-gray-400",               !isActive);
+    btn.classList.toggle(c.border || "border-blue-500", isActive);
+    btn.classList.toggle("border-transparent",          !isActive);
   });
 }
 
@@ -1284,6 +1384,120 @@ function reset2() {
 // ── Helpers ────────────────────────────────────────────────────────
 function _esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB 3 – CHUẨN HÓA 5512
+// ══════════════════════════════════════════════════════════════════
+let file5512 = null;
+let result5512Data = null;
+
+function setupDnD5512() {
+  const dz = document.getElementById('dz5512');
+  if (!dz) return;
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) handle5512File({ target: { files: e.dataTransfer.files } });
+  });
+  document.getElementById('sel-mon-5512')?.addEventListener('change', update5512Btn);
+  document.getElementById('sel-cap-5512')?.addEventListener('change', update5512Btn);
+}
+
+function handle5512File(e) {
+  const f = e.target.files[0];
+  if (!f?.name.toLowerCase().endsWith('.docx')) { show5512Err('Chọn file .docx nhé!'); return; }
+  file5512 = f;
+  document.getElementById('fi5512-name').textContent = f.name;
+  show('fi5512-info'); update5512Btn();
+  hide('err5512'); hide('result5512'); hide('load5512');
+}
+
+function update5512Btn() {
+  const mon = document.getElementById('sel-mon-5512')?.value;
+  const cap = document.getElementById('sel-cap-5512')?.value;
+  if (file5512 && mon && cap) show('btn5512-analyze'); else hide('btn5512-analyze');
+}
+
+async function run5512Analysis() {
+  if (!file5512) return;
+  const mon = document.getElementById('sel-mon-5512').value;
+  const cap = document.getElementById('sel-cap-5512').value;
+  hide('btn5512-analyze'); hide('fi5512-info'); hide('err5512'); hide('result5512');
+  show('load5512');
+  try {
+    const fd = new FormData();
+    fd.append('file', file5512); fd.append('mon', mon); fd.append('cap', cap);
+    const r = await handleApiResponse(await authFetch('/convert-5512', { method: 'POST', body: fd }));
+    result5512Data = await r.json();
+    render5512Result(result5512Data);
+    hide('load5512'); show('result5512');
+  } catch(err) {
+    hide('load5512'); show('btn5512-analyze'); show('fi5512-info');
+    if (err.message !== 'quota_exceeded') show5512Err('Lỗi: ' + err.message);
+  }
+}
+
+const _5512_COLORS = {
+  buoc_1:{bg:'bg-blue-50',  border:'border-blue-200',  head:'text-blue-700',  dot:'🔵'},
+  buoc_2:{bg:'bg-green-50', border:'border-green-200', head:'text-green-700', dot:'🟢'},
+  buoc_3:{bg:'bg-amber-50', border:'border-amber-200', head:'text-amber-700', dot:'🟡'},
+  buoc_4:{bg:'bg-orange-50',border:'border-orange-200',head:'text-orange-700',dot:'🟠'},
+};
+const _5512_NAMES = {
+  buoc_1:'Bước 1 – Xác định vấn đề / Nhiệm vụ học tập',
+  buoc_2:'Bước 2 – Nghiên cứu kiến thức mới',
+  buoc_3:'Bước 3 – Luyện tập',
+  buoc_4:'Bước 4 – Vận dụng',
+};
+
+function render5512Result(data) {
+  const box = document.getElementById('steps5512');
+  box.innerHTML = `<div class="bg-purple-100 border border-purple-200 rounded-xl px-4 py-2 mb-1">
+    <p class="font-black text-purple-700 text-sm">📖 ${_esc(data.ten_bai||'')} — ${_esc(data.mon||'')} ${_esc(data.cap||'')}</p></div>`;
+
+  for (const [key, cl] of Object.entries(_5512_COLORS)) {
+    const step = data[key] || {};
+    const nls  = step.nls || [];
+    let html = `<div class="${cl.bg} ${cl.border} border rounded-2xl p-3 mb-2">
+      <p class="${cl.head} font-black text-xs mb-1.5">${cl.dot} ${_5512_NAMES[key]}</p>
+      <p class="text-gray-600 text-xs leading-relaxed mb-2">${_esc((step.noi_dung||'').substring(0,300))}${(step.noi_dung||'').length>300?'…':''}</p>`;
+    if (nls.length) {
+      html += `<div class="bg-white rounded-xl border border-indigo-100 p-2 space-y-1.5">
+        <p class="text-indigo-600 font-black text-xs">🔖 Năng lực số tích hợp (${_esc(data.mon||'')}):</p>`;
+      nls.forEach(item => {
+        html += `<div class="flex items-start gap-1.5">
+          <code class="bg-indigo-100 text-indigo-700 font-black text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0">${_esc(item.ma||'')}</code>
+          <span class="text-gray-600 text-xs font-semibold">${_esc(item.mo_ta||'')} <em class="text-indigo-400">▶ ${_esc(item.cong_cu||'')}</em></span></div>`;
+      });
+      html += '</div>';
+    } else {
+      html += `<p class="text-gray-400 text-xs italic">(Không có hoạt động công nghệ số trong bước này)</p>`;
+    }
+    html += '</div>';
+    box.innerHTML += html;
+  }
+}
+
+function copy5512JSON() {
+  if (!result5512Data) return;
+  navigator.clipboard.writeText(JSON.stringify(result5512Data, null, 2)).then(() => alert('Đã copy JSON!'));
+}
+function download5512JSON() {
+  if (!result5512Data) return;
+  const blob = new Blob([JSON.stringify(result5512Data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`${result5512Data.ten_bai||'giao-an'}_5512.json`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+function show5512Err(msg){document.getElementById('err5512-msg').textContent=msg;show('err5512');}
+function reset5512(){
+  file5512=null; result5512Data=null;
+  document.getElementById('fi5512').value='';
+  ['sel-mon-5512','sel-cap-5512'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('steps5512').innerHTML='';
+  ['fi5512-info','btn5512-analyze','load5512','result5512','err5512'].forEach(hide);
 }
 
 // ══════════════════════════════════════════════════════════════════
