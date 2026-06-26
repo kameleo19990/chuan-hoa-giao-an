@@ -790,9 +790,9 @@ def fix_mathtype_ole_fallback(doc):
 
 def _auto_insert_nls_in_activities(doc: Document, mon: str = "") -> None:
     """
-    TỰ ĐỘNG phát hiện hoạt động học tập trong giáo án → gợi ý mã NLS
-    phù hợp bối cảnh VÀ môn học → chèn vào bảng tiến trình.
-    Mỗi hàng NLS thêm vào gồm:  Mã + Nội dung NLS  /  ▶ Công cụ gợi ý
+    TỰ ĐỘNG gọi inject_competence_to_docx với selected_items rỗng.
+    Hàm sẽ tự phát hiện đoạn dùng công cụ số và gợi ý mã NLS inline.
+    Dùng cho Tab 1 (Chuẩn hóa ngay).
 
     Bỏ qua nếu bảng đã có hàng 'Năng lực số tích hợp' (tránh trùng).
     """
@@ -2252,65 +2252,224 @@ def insert_nls_into_activity_tables(doc: Document, selected_items: list) -> None
                 current_act_key = None
 
 
+# ── Từ khóa phát hiện "hoạt động có dùng công cụ số" ─────────────────────────
+_DIGITAL_KW = [
+    "hình ảnh", "video", "clip", "theo dõi",
+    "tìm kiếm", "tra cứu", "tìm thông tin",
+    "thảo luận", "nhóm", "hợp tác",
+    "báo cáo", "trình bày", "thuyết trình",
+    "chia sẻ", "phần mềm", "ứng dụng",
+    "máy tính", "điện thoại", "internet", "mạng", "trực tuyến",
+    "slide", "powerpoint", "google", "canva", "padlet",
+    "quan sát", "thu thập", "phân tích số liệu",
+    "sgk điện tử", "sách điện tử",
+    "kahoot", "quizlet", "quizizz", "mentimeter",
+    "zoom", "meet", "teams", "bảng tính", "word",
+]
+
+
+def _is_to_chuc_table(table) -> bool:
+    """Kiểm tra đây có phải bảng 'Tổ chức thực hiện' (có cột HĐ GV/HS)."""
+    if not table.rows or len(table.rows) < 2:
+        return False
+    header = _norm(" ".join(c.text for c in table.rows[0].cells))
+    return any(kw in header for kw in [
+        "gv va hs", "giao vien", "hoc sinh",
+        "hoat dong", "to chuc", "thuc hien",
+    ])
+
+
+def _find_gv_col(table) -> int:
+    """Tìm chỉ số cột 'HĐ CỦA GV VÀ HS' (mặc định cột 0)."""
+    if not table.rows:
+        return 0
+    for i, cell in enumerate(table.rows[0].cells):
+        ct = _norm(cell.text)
+        if any(kw in ct for kw in [
+            "hd cua gv va hs", "gv va hs", "hoat dong cua gv",
+            "to chuc thuc hien", "cua gv va hs",
+        ]):
+            return i
+    return 0
+
+
+def _cell_font_info(cell) -> tuple[str, float]:
+    """Đọc font và cỡ chữ từ nội dung ô để đồng bộ định dạng."""
+    for para in cell.paragraphs:
+        for run in para.runs:
+            if run.font.name and run.font.size:
+                return run.font.name, run.font.size.pt
+    return "Times New Roman", 13.0
+
+
+def _has_nls_below(paragraphs: list, idx: int, window: int = 2) -> bool:
+    """Kiểm tra trong [window] đoạn ngay sau idx đã có NLS chưa."""
+    for j in range(idx + 1, min(idx + 1 + window, len(paragraphs))):
+        if "nang luc so" in _norm(paragraphs[j].text):
+            return True
+    return False
+
+
+def _make_nls_para_elem(text: str, bold=False, italic=False,
+                         font_name="Times New Roman", font_sz_pt=13.0):
+    """Tạo <w:p> để chèn inline vào ô bảng."""
+    p  = OxmlElement("w:p")
+    r  = OxmlElement("w:r")
+    rPr = OxmlElement("w:rPr")
+
+    rF = OxmlElement("w:rFonts")
+    for a in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
+        rF.set(qn(a), font_name)
+    rPr.append(rF)
+
+    for tag in ("w:sz", "w:szCs"):
+        el = OxmlElement(tag)
+        el.set(qn("w:val"), str(int(font_sz_pt * 2)))
+        rPr.append(el)
+
+    if bold:   rPr.append(OxmlElement("w:b"))
+    if italic: rPr.append(OxmlElement("w:i"))
+    r.append(rPr)
+
+    t = OxmlElement("w:t")
+    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    t.text = text
+    r.append(t)
+    p.append(r)
+    return p
+
+
+def _insert_nls_block_inline(ref_elem, items: list,
+                              font_name: str, font_sz: float,
+                              label: str = "Năng lực số tích hợp"):
+    """
+    Chèn khối NLS gồm nhiều đoạn ngay SAU ref_elem (trong cùng ô bảng).
+    Dùng addnext theo thứ tự ngược để thứ tự cuối cùng đúng.
+    Kết quả: Label → Code1 → Tool1 → Code2 → Tool2 ...
+    """
+    lines: list[tuple[str, bool, bool]] = [
+        (f"{label} (NLS):", True, True)
+    ]
+    for item in items[:2]:
+        code  = item.get("code", "")
+        text  = (item.get("text") or "").strip()
+        tools = item.get("tools") or CODE_TO_TOOLS.get(code, [])
+        if text:
+            lines.append((text, False, False))
+        if tools:
+            lines.append((
+                f"  ▶ Công cụ thực hiện: {'; '.join(tools[:2])}",
+                False, True,
+            ))
+
+    # Chèn ngược để thứ tự cuối là đúng
+    current = ref_elem
+    for txt, bold, italic in reversed(lines):
+        new_p = _make_nls_para_elem(txt, bold=bold, italic=italic,
+                                     font_name=font_name, font_sz_pt=font_sz)
+        current.addnext(new_p)
+
+
+def _filter_items_for_para(text_norm: str, selected_items: list) -> list:
+    """Lọc NLS items phù hợp nhất với nội dung đoạn văn."""
+    scored = []
+    for item in selected_items:
+        item_norm = _norm(item.get("text", ""))
+        score = sum(1 for w in item_norm.split() if len(w) > 3 and w in text_norm)
+        if score > 0:
+            scored.append((score, item))
+    scored.sort(key=lambda x: -x[0])
+    return [it for _, it in scored[:2]]
+
+
 def inject_competence_to_docx(
     doc: Document, selected_items: list, mon_label: str, cap_label: str
 ):
     """
-    Chèn các NLS đã được giáo viên duyệt vào file Word.
-    selected_items: [{"activity_name": str, "text": str}, ...]
+    Logic mới: Chèn NLS inline ngay sau từng bước/đoạn hoạt động
+    có dùng công cụ số trong bảng 'Tổ chức thực hiện'.
+
+    Nguyên tắc:
+    1. Tìm bảng có cột 'HĐ CỦA GV VÀ HS'.
+    2. Duyệt từng đoạn trong cột đó.
+    3. Đoạn nào chứa từ khóa công cụ số → chèn NLS ngay bên dưới.
+    4. Định dạng đồng bộ với ô bảng hiện có.
+    5. Bỏ qua nếu NLS đã tồn tại ngay dưới đoạn đó.
     """
-    for para in doc.paragraphs:
-        if "năng lực số" in para.text.lower():
-            logger.info("Đã có 'Năng lực số' — bỏ qua chèn trùng.")
-            return
+    mon_code = _detect_subject_from_doc(doc)
 
-    ref_p = _find_insertion_wp(doc)
-    if ref_p is None:
-        return
+    found_table  = False
+    seen_tc_ids: set[int] = set()   # tránh xử lý merged cell nhiều lần
 
-    # Nhóm items theo activity_name
-    from collections import OrderedDict
-    groups: OrderedDict = OrderedDict()
-    ungrouped: list = []
-    for item in selected_items:
-        act = (item.get("activity_name") or "").strip()
-        text = (item.get("text") or "").strip()
-        if not text:
+    for table in doc.tables:
+        if not _is_to_chuc_table(table):
             continue
-        if act:
-            groups.setdefault(act, []).append(text)
-        else:
-            ungrouped.append(text)
 
-    # Chèn tiêu đề chính
-    header = _make_wp(
-        f"- Năng lực số tích hợp ({mon_label} – {cap_label}):", bold=True
-    )
-    current = ref_p
-    current.addnext(header)
-    current = header
+        gv_col     = _find_gv_col(table)
+        found_table = True
 
-    # Chèn theo nhóm hoạt động
-    for act_name, texts in groups.items():
-        sub = _make_wp(f"▸ {act_name}:", bold=True, indent_twips=200)
-        current.addnext(sub)
-        current = sub
-        for text in texts:
-            row = _make_wp(f"+ {text}", indent_twips=480)
-            current.addnext(row)
-            current = row
+        for row_idx, row in enumerate(table.rows):
+            if row_idx == 0:           # bỏ qua hàng header
+                continue
+            if len(row.cells) <= gv_col:
+                continue
 
-    # Chèn các mục không thuộc nhóm nào
-    for text in ungrouped:
-        row = _make_wp(f"+ {text}", indent_twips=360)
-        current.addnext(row)
-        current = row
+            cell = row.cells[gv_col]
+            tc_id = id(cell._tc)
+            if tc_id in seen_tc_ids:   # merged cell đã xử lý
+                continue
+            seen_tc_ids.add(tc_id)
 
-    # ── BƯỚC 2: Chèn NLS vào bảng tiến trình từng hoạt động ─────────────────
-    try:
-        insert_nls_into_activity_tables(doc, selected_items)
-    except Exception as e:
-        logger.warning(f"insert_nls_into_activity_tables: {e}")
+            font_name, font_sz = _cell_font_info(cell)
+            paras = list(cell.paragraphs)   # snapshot trước khi chèn
+
+            for i, para in enumerate(paras):
+                text = para.text.strip()
+                if not text:
+                    continue
+
+                # Bỏ qua đoạn ĐÃ là NLS
+                if "năng lực số" in text.lower():
+                    continue
+
+                # Bỏ qua nếu NLS đã có ngay dưới đoạn này
+                if _has_nls_below(paras, i, window=1):
+                    continue
+
+                # Phát hiện đoạn có dùng công cụ số
+                text_norm = _norm(text)
+                if not any(_norm(kw) in text_norm for kw in _DIGITAL_KW):
+                    continue
+
+                # Tìm mã NLS phù hợp
+                # 1. Ưu tiên items đã được GV duyệt (selected_items)
+                nls_items: list[dict] = []
+                if selected_items:
+                    nls_items = _filter_items_for_para(text_norm, selected_items)
+
+                # 2. Fallback: tự gợi ý theo nội dung + môn học
+                if not nls_items:
+                    nls_items = _suggest_codes_from_lesson(
+                        text_norm, max_codes=2, mon=mon_code
+                    )
+
+                if not nls_items:
+                    continue
+
+                # Chèn khối NLS inline sau đoạn này
+                label = (
+                    f"Năng lực số tích hợp – {mon_label}"
+                    if mon_label else "Năng lực số tích hợp"
+                )
+                _insert_nls_block_inline(
+                    para._p, nls_items,
+                    font_name=font_name, font_sz=font_sz,
+                    label=label,
+                )
+                logger.info(f"Chèn NLS sau: '{text[:60]}'")
+
+    if not found_table:
+        logger.info("Không tìm thấy bảng 'Tổ chức thực hiện' — bỏ qua.")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
