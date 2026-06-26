@@ -3053,53 +3053,64 @@ NHIỆM VỤ: Phân tích giáo án {mon_name}{' – ' + cap_name if cap_name el
 
 async def _call_gemini_5512(doc_text: str, mon: str, cap: str) -> dict:
     """
-    Gọi Google Gemini API (miễn phí) để phân tích giáo án theo 5512.
-    Ưu tiên dùng nếu GEMINI_API_KEY có sẵn.
+    Gọi Gemini REST API trực tiếp bằng httpx (không dùng SDK để tránh lỗi version).
+    Thử lần lượt các model cho đến khi thành công.
     """
-    from google import genai as _genai
+    import httpx
     import json as _json
     import asyncio as _asyncio
 
-    client = _genai.Client(api_key=GEMINI_API_KEY)
     prompt = _build_5512_prompt(doc_text, mon, cap)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature":     0.3,
+            "maxOutputTokens": 4096,
+        },
+    }
 
-    # Thử lần lượt các model đang hoạt động (2025)
-    MODELS_TO_TRY = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-2.5-flash-lite-preview-06-17",
-        "gemini-2.5-flash",
+    # Model + API version combinations — thử lần lượt
+    ENDPOINTS = [
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
     ]
-    raw = None
-    last_err = None
 
-    for model_name in MODELS_TO_TRY:
-        try:
-            logger.info(f"Gemini: thử model '{model_name}'")
-            response = client.models.generate_content(
-                model    = model_name,
-                contents = prompt,
-            )
-            raw = response.text.strip()
-            logger.info(f"Gemini: thành công với '{model_name}'")
-            break
-        except Exception as e:
-            es = str(e)
-            last_err = e
-            if "429" in es or "RESOURCE_EXHAUSTED" in es or "quota" in es.lower():
-                logger.warning(f"Gemini quota hết cho '{model_name}' — thử model tiếp theo")
-                await _asyncio.sleep(2)   # chờ 2s trước khi thử model khác
+    raw: str | None = None
+
+    async with httpx.AsyncClient(timeout=120) as http:
+        for endpoint in ENDPOINTS:
+            model_name = endpoint.split("/models/")[1].split(":")[0]
+            try:
+                logger.info(f"Gemini REST: thử '{model_name}'")
+                r = await http.post(
+                    endpoint,
+                    params={"key": GEMINI_API_KEY},
+                    json=payload,
+                )
+                if r.status_code == 200:
+                    data   = r.json()
+                    raw    = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    logger.info(f"Gemini REST: thành công với '{model_name}'")
+                    break
+                elif r.status_code == 429:
+                    logger.warning(f"Gemini quota '{model_name}' — thử tiếp")
+                    await _asyncio.sleep(2)
+                    continue
+                else:
+                    logger.warning(f"Gemini '{model_name}' → {r.status_code}: {r.text[:200]}")
+                    continue
+            except Exception as e:
+                logger.warning(f"Gemini '{model_name}' exception: {e}")
                 continue
-            # Lỗi khác (không phải quota) → báo ngay
-            logger.error(f"Gemini API error ({model_name}): {e}")
-            raise HTTPException(500, f"Gemini API lỗi: {e}")
 
     if raw is None:
         raise HTTPException(
             503,
-            "Gemini API đã hết quota miễn phí cho tất cả model. "
-            "Vui lòng vào https://aistudio.google.com → chọn project → "
-            "Enable Billing (vẫn miễn phí ở mức nhỏ), hoặc thử lại sau 1 phút."
+            "Gemini API không phản hồi với tất cả model. "
+            "Kiểm tra GEMINI_API_KEY còn hiệu lực và đã bật billing tại "
+            "aistudio.google.com, rồi thử lại."
         )
 
     # Bóc JSON từ response
