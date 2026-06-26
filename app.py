@@ -3181,7 +3181,7 @@ async def _call_groq_5512(doc_text: str, mon: str, cap: str) -> dict:
     prompt  = _build_5512_prompt(doc_text, mon, cap)
 
     payload = {
-        "model":       "llama-3.1-8b-instant",   # 30K TPM limit vs 12K của 70B
+        "model":       "llama-3.3-70b-versatile",  # 12K TPM — đủ với prompt 8.4K token
         "messages":    [{"role": "user", "content": prompt}],
         "temperature": 0.3,
         "max_tokens":  4096,
