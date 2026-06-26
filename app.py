@@ -3347,6 +3347,189 @@ async def convert_5512_endpoint(
         _cleanup(tmp.name)
 
 
+def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str) -> Document:
+    """
+    Tạo file .docx chuẩn Công văn 5512 từ kết quả phân tích JSON.
+    Cấu trúc: Tiêu đề → I.Mục tiêu (+ NLS tổng hợp) → III.Tiến trình (4 bước + NLS inline).
+    """
+    doc = Document()
+
+    # ── Margin A4 ─────────────────────────────────────────────────────────────
+    for sec in doc.sections:
+        sec.top_margin    = Cm(2.0); sec.bottom_margin = Cm(2.0)
+        sec.left_margin   = Cm(3.0); sec.right_margin  = Cm(2.0)
+        sec.page_height   = Cm(29.7); sec.page_width   = Cm(21.0)
+
+    def _run(para, text, bold=False, italic=False, size_pt=14):
+        r = para.add_run(text)
+        r.bold = bold; r.italic = italic
+        r.font.name = "Times New Roman"; r.font.size = Pt(size_pt)
+        return r
+
+    def _para(style="Normal", space_before=3, space_after=3):
+        p = doc.add_paragraph(style=style)
+        p.paragraph_format.space_before = Pt(space_before)
+        p.paragraph_format.space_after  = Pt(space_after)
+        p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        return p
+
+    def _heading(text, level=1):
+        h = doc.add_heading(text, level=level)
+        for run in h.runs:
+            run.font.name = "Times New Roman"; run.font.size = Pt(14 - level + 1)
+        h.paragraph_format.space_before = Pt(6)
+        h.paragraph_format.space_after  = Pt(3)
+        return h
+
+    ten_bai  = analysis.get("ten_bai", "Giáo án")
+    mon_cap  = f"{mon_name}{' – ' + cap_name if cap_name else ''}"
+
+    # ── Tiêu đề ───────────────────────────────────────────────────────────────
+    t = _para(); t.alignment = 1   # center
+    _run(t, ten_bai, bold=True, size_pt=16)
+    t2 = _para(); t2.alignment = 1
+    _run(t2, f"Môn: {mon_cap}", bold=True, size_pt=14)
+
+    # ── I. Mục tiêu ───────────────────────────────────────────────────────────
+    _heading("I. Mục tiêu", level=1)
+    _heading("1. Về kiến thức", level=2)
+    kt = _para(); _run(kt, "(Giáo viên bổ sung mục tiêu kiến thức cụ thể)", italic=True)
+
+    _heading("2. Về năng lực", level=2)
+    nl = _para(); _run(nl, "- Các năng lực chung và năng lực đặc thù môn học.")
+
+    # Thu thập tất cả NLS từ 4 bước để đưa vào Mục tiêu
+    all_nls: list[dict] = []
+    for step_key in ("buoc_1","buoc_2","buoc_3","buoc_4"):
+        all_nls.extend(analysis.get(step_key, {}).get("nls", []))
+
+    if all_nls:
+        p_nls_title = _para()
+        _run(p_nls_title, f"Năng lực số tích hợp – {mon_name} (NLS):", bold=True, italic=True)
+        seen_codes: set = set()
+        for item in all_nls:
+            code = item.get("ma","")
+            if code in seen_codes:
+                continue
+            seen_codes.add(code)
+            pn = _para()
+            _run(pn, f"- {code}: {item.get('mo_ta','')}")
+            if item.get("cong_cu"):
+                _run(pn, f"  ▶ Công cụ: {item['cong_cu']}", italic=True)
+
+    _heading("3. Về phẩm chất", level=2)
+    pq = _para(); _run(pq, "(Giáo viên bổ sung mục tiêu phẩm chất cụ thể)", italic=True)
+
+    # ── II. Thiết bị ──────────────────────────────────────────────────────────
+    _heading("II. Thiết bị dạy học và học liệu", level=1)
+    tb = _para(); _run(tb, "- SGK, sách bài tập, máy chiếu.")
+    # Thêm công cụ số từ NLS
+    all_tools: list[str] = []
+    for item in all_nls:
+        ct = (item.get("cong_cu") or "").strip()
+        if ct and ct not in all_tools:
+            all_tools.append(ct)
+    if all_tools:
+        tbt = _para(); _run(tbt, "- Công cụ số: " + "; ".join(all_tools[:5]) + ".")
+
+    # ── III. Tiến trình ───────────────────────────────────────────────────────
+    _heading("III. Tiến trình dạy học", level=1)
+
+    STEP_META = {
+        "buoc_1": ("1.", "Xác định vấn đề / Nhiệm vụ học tập"),
+        "buoc_2": ("2.", "Nghiên cứu kiến thức mới / Thực hiện nhiệm vụ"),
+        "buoc_3": ("3.", "Luyện tập"),
+        "buoc_4": ("4.", "Vận dụng"),
+    }
+
+    for step_key, (num, step_title) in STEP_META.items():
+        step = analysis.get(step_key, {})
+        noi_dung = (step.get("noi_dung") or "").strip()
+        nls_items = step.get("nls", [])
+
+        _heading(f"{num} {step_title}", level=2)
+
+        # Nội dung hoạt động
+        if noi_dung:
+            for line in noi_dung.split("\n"):
+                line = line.strip()
+                if line:
+                    p = _para(); _run(p, line)
+        else:
+            p = _para(); _run(p, "(Chưa có nội dung — giáo viên bổ sung)", italic=True)
+
+        # NLS tích hợp vào bước
+        if nls_items:
+            nls_h = _para()
+            _run(nls_h, f"Năng lực số tích hợp – {mon_name} (NLS):", bold=True, italic=True)
+            for item in nls_items:
+                pn = _para()
+                _run(pn, f"  {item.get('ma','')}: {item.get('mo_ta','')}")
+                if item.get("cong_cu"):
+                    _run(pn, f"\n  ▶ Công cụ thực hiện: {item['cong_cu']}", italic=True)
+
+    return doc
+
+
+@app.post("/generate-5512-docx")
+async def generate_5512_docx_endpoint(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    mon:  str = Form(""),
+    cap:  str = Form(""),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Phân tích giáo án thô → tạo file .docx chuẩn 5512 + NLS tích hợp.
+    Trả về file .docx sẵn sàng sử dụng.
+    """
+    _check_quota(user["sub"])
+
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(400, "Chỉ hỗ trợ .docx")
+
+    tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_in.write(await file.read()); tmp_in.close()
+    tmp_out = tmp_in.name.replace(".docx", "_5512.docx")
+
+    try:
+        doc      = _open_docx_safe(tmp_in.name)
+        doc_text = extract_doc_text(doc)
+        if not doc_text.strip():
+            raise HTTPException(422, "Không đọc được nội dung file.")
+
+        # Phân tích với AI
+        if GROQ_API_KEY:
+            analysis = await _call_groq_5512(doc_text, mon, cap)
+        elif GEMINI_API_KEY:
+            analysis = await _call_gemini_5512(doc_text, mon, cap)
+        else:
+            raise HTTPException(503, "Chưa cấu hình AI API (GROQ_API_KEY).")
+
+        # Tạo file Word chuẩn 5512
+        mon_name = MON_LABELS.get(mon, mon) or "môn học"
+        cap_name = CAP_LABELS.get(cap, cap) or ""
+        new_doc  = _make_5512_docx(analysis, mon_name, cap_name)
+        new_doc.save(tmp_out)
+
+        stem = os.path.splitext(file.filename)[0]
+        background_tasks.add_task(_cleanup, tmp_in.name)
+        background_tasks.add_task(_cleanup, tmp_out)
+        return FileResponse(
+            tmp_out,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=f"{stem}_5512_chuanhoa.docx",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"generate-5512-docx error: {exc}", exc_info=True)
+        raise HTTPException(500, f"Lỗi tạo file: {exc}")
+    finally:
+        _cleanup(tmp_in.name)
+
+
 @app.get("/nls-codes")
 async def get_nls_codes():
     """

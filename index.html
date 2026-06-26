@@ -471,11 +471,23 @@
         <!-- 4 bước -->
         <div id="steps5512" class="space-y-3"></div>
 
-        <!-- Download -->
-        <button onclick="download5512JSON()" class="mt-3 w-full bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-600 hover:to-violet-600 text-white font-black text-sm rounded-2xl py-3 shadow transition-all hover:scale-105 active:scale-95">
-          ⬇️ Tải JSON để điền vào template Word
+        <!-- Tạo .docx chuẩn 5512 -->
+        <button id="btn5512-docx" onclick="generate5512Docx()"
+          class="mt-3 w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-black text-base rounded-2xl py-4 shadow-lg transition-all hover:scale-105 active:scale-95">
+          📄 Tạo file .docx chuẩn 5512 + NLS
         </button>
-        <button onclick="reset5512()" class="mt-2 w-full text-purple-500 hover:text-purple-700 font-bold text-xs py-2 transition">Phân tích file khác</button>
+
+        <!-- Loading tạo docx -->
+        <div id="load5512-docx" class="hidden mt-3 flex items-center gap-3 bg-purple-50 rounded-xl px-4 py-3 border border-purple-200">
+          <div class="flex gap-1"><span class="dot bg-purple-400"></span><span class="dot bg-purple-400"></span><span class="dot bg-purple-400"></span></div>
+          <p class="text-purple-700 font-bold text-sm">Đang tạo file .docx chuẩn 5512...</p>
+        </div>
+
+        <!-- Download JSON (phụ) -->
+        <button onclick="download5512JSON()" class="mt-2 w-full border border-purple-200 hover:bg-purple-50 text-purple-600 font-bold text-xs rounded-xl py-2 transition">
+          { } Tải JSON thuần
+        </button>
+        <button onclick="reset5512()" class="mt-1 w-full text-purple-400 hover:text-purple-600 font-bold text-xs py-2 transition">Phân tích file khác</button>
       </div>
 
       <!-- Lỗi -->
@@ -1477,6 +1489,26 @@ function render5512Result(data) {
     }
     html += '</div>';
     box.innerHTML += html;
+  }
+}
+
+async function generate5512Docx() {
+  if (!file5512) return;
+  const mon = document.getElementById('sel-mon-5512').value;
+  const cap = document.getElementById('sel-cap-5512').value;
+
+  hide('btn5512-docx'); show('load5512-docx');
+  try {
+    const fd = new FormData();
+    fd.append('file', file5512); fd.append('mon', mon); fd.append('cap', cap);
+    const r = await handleApiResponse(
+      await authFetch('/generate-5512-docx', { method: 'POST', body: fd })
+    );
+    await triggerDownload(r);
+    hide('load5512-docx'); show('btn5512-docx');
+  } catch(err) {
+    hide('load5512-docx'); show('btn5512-docx');
+    if (err.message !== 'quota_exceeded') show5512Err('Lỗi tạo file: ' + err.message);
   }
 }
 
