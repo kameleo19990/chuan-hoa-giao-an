@@ -2306,6 +2306,15 @@ def insert_nls_into_activity_tables(doc: Document, selected_items: list) -> None
                 current_act_key = None
 
 
+# ── Từ khóa nhận diện HOẠT ĐỘNG / BƯỚC trong ô bảng ────────────────────────
+_ACTIVITY_TRIGGER_KW = [
+    "hoạt động", "khởi động", "hình thành kiến thức",
+    "luyện tập", "vận dụng", "mở đầu", "củng cố",
+    "tìm hiểu", "thực hành", "đánh giá",
+    "bước 1", "bước 2", "bước 3", "bước 4", "bước 5",
+    "tổ chức thực hiện",
+]
+
 # ── Từ khóa NGHIÊM NGẶT: công cụ/hành động số cụ thể ───────────────────────
 # (chặt hơn _DIGITAL_KW cũ — tránh false-positive như 'nhóm', 'sgk trang ...')
 _DIGITAL_KW = [
@@ -2492,6 +2501,144 @@ def _filter_items_for_para(text_norm: str, selected_items: list) -> list:
     return [it for _, it in scored[:2]]
 
 
+def _cell_has_activity_kw(cell_text: str) -> bool:
+    """Kiểm tra ô bảng có chứa từ khóa nhận diện Hoạt động/Bước."""
+    t = _norm(cell_text)
+    return any(_norm(kw) in t for kw in _ACTIVITY_TRIGGER_KW)
+
+
+def _cell_has_nls(cell_text: str) -> bool:
+    """Kiểm tra ô bảng đã có NLS chưa (tránh trùng)."""
+    return "năng lực số tích hợp" in cell_text.lower()
+
+
+def _find_gv_hs_col(table) -> int:
+    """
+    Tìm chỉ số cột 'HĐ CỦA GV VÀ HS' trong bảng.
+    Duyệt hàng đầu, kiểm tra từ khóa; mặc định là cột index 2 (cột thứ 3).
+    """
+    if not table.rows:
+        return 2
+    for i, cell in enumerate(table.rows[0].cells):
+        ct = _norm(cell.text)
+        if any(kw in ct for kw in [
+            "hd cua gv va hs", "gv va hs", "hoat dong cua gv",
+            "to chuc thuc hien", "cua gv va hs", "gv & hs",
+        ]):
+            return i
+    # Mặc định cột thứ 3 (index 2) như user chỉ định
+    return min(2, len(table.rows[0].cells) - 1) if table.rows else 2
+
+
+def _match_or_suggest_nls(cell_norm: str, suggestion_map: dict, mon_code: str) -> list:
+    """
+    Tìm NLS items phù hợp:
+    1. Từ suggestion_map (GV đã duyệt) — ưu tiên tên hoạt động khớp.
+    2. Fallback: tự gợi ý từ _suggest_codes_from_lesson.
+    """
+    # Thử khớp tên hoạt động
+    for act_name, items in suggestion_map.items():
+        an = _norm(act_name)
+        if an[:20] in cell_norm or any(_norm(w) in cell_norm for w in an.split() if len(w) > 3):
+            if items:
+                return items[:2]
+
+    # Fallback: auto-suggest
+    if any(_norm(kw) in cell_norm for kw in _DIGITAL_KW):
+        return _suggest_codes_from_lesson(cell_norm, max_codes=2, mon=mon_code)
+
+    return []
+
+
+def _append_nls_to_para(last_p_elem, nls_items: list,
+                          subject_name: str, font_name: str, font_sz: float):
+    """Gọi _insert_nls_block_inline với label đã giải quyết tên môn."""
+    label = (
+        f"Năng lực số tích hợp – {subject_name}"
+        if subject_name else "Năng lực số tích hợp"
+    )
+    _insert_nls_block_inline(
+        last_p_elem, nls_items,
+        font_name=font_name, font_sz=font_sz, label=label,
+    )
+
+
+def _process_table_recursive(
+    table,
+    suggestion_map: dict,
+    subject_name: str,
+    mon_code: str,
+    visited: set,
+) -> None:
+    """
+    Duyệt đệ quy qua bảng (và bảng lồng bên trong):
+    - Tìm cột 'HĐ CỦA GV VÀ HS' (keyword hoặc index 2).
+    - Nhận diện ô có từ khóa Hoạt động/Bước.
+    - Nhóm đoạn trong ô theo Bước → chèn NLS ở cuối mỗi Bước.
+    - Xử lý đệ quy bảng lồng (bảng con).
+    Phòng duplicate bằng set visited theo id(_tbl).
+    """
+    tbl_id = id(table._tbl)
+    if tbl_id in visited:
+        return
+    visited.add(tbl_id)
+
+    is_activity = _is_to_chuc_table(table)
+    gv_col      = _find_gv_hs_col(table) if is_activity else None
+    seen_tc: set[int] = set()
+
+    for row_idx, row in enumerate(table.rows):
+        for col_idx, cell in enumerate(row.cells):
+            tc_id = id(cell._tc)
+            if tc_id in seen_tc:
+                continue
+            seen_tc.add(tc_id)
+
+            # ── Đệ quy vào bảng lồng trong ô ──────────────────────────────
+            for nested in cell.tables:
+                _process_table_recursive(
+                    nested, suggestion_map, subject_name, mon_code, visited
+                )
+
+            # ── Chỉ xử lý cột GV/HS trong bảng hoạt động ─────────────────
+            if not is_activity or row_idx == 0 or col_idx != gv_col:
+                continue
+
+            cell_text = cell.text
+            if not _cell_has_activity_kw(cell_text):
+                continue
+            if _cell_has_nls(cell_text):
+                continue
+
+            font_name, font_sz = _cell_font_info(cell)
+            paras = list(cell.paragraphs)
+            cell_norm = _norm(cell_text)
+
+            # ── Nhóm theo Bước (nếu có cấu trúc Bước X:) ─────────────────
+            buoc_groups = _group_by_buoc(paras)
+
+            if buoc_groups:
+                for grp in buoc_groups:
+                    grp_paras  = paras[grp["head_idx"]: grp["last_idx"] + 1]
+                    grp_norm   = _norm(grp["full_text"])
+
+                    # Bỏ qua Bước đã có NLS
+                    if any("năng lực số" in p.text.lower() for p in grp_paras):
+                        continue
+
+                    nls = _match_or_suggest_nls(grp_norm, suggestion_map, mon_code)
+                    if nls:
+                        last_para = paras[grp["last_idx"]]
+                        _append_nls_to_para(last_para._p, nls, subject_name, font_name, font_sz)
+                        logger.info(f"NLS → cuối '{grp['heading'][:50]}'")
+            else:
+                # ── Không có Bước → chèn cuối toàn bộ ô ─────────────────
+                nls = _match_or_suggest_nls(cell_norm, suggestion_map, mon_code)
+                if nls and paras:
+                    _append_nls_to_para(paras[-1]._p, nls, subject_name, font_name, font_sz)
+                    logger.info(f"NLS → cuối ô (row {row_idx})")
+
+
 def _insert_nls_into_muc_tieu(
     doc: Document, selected_items: list, mon_label: str, cap_label: str
 ) -> None:
@@ -2576,94 +2723,24 @@ def inject_competence_to_docx(
     # Truyền subject_name (đã giải quyết) thay vì mon_label gốc
     _insert_nls_into_muc_tieu(doc, selected_items, subject_name, cap_label)
 
-    # ── BƯỚC 2: Chèn NLS vào cuối từng BƯỚC trong bảng 'Tổ chức thực hiện' ───
-    # Nhóm nội dung theo Bước → phân tích toàn bộ Bước → chèn MỘT lần ở cuối.
-    found_table  = False
-    seen_tc_ids: set[int] = set()
+    # ── BƯỚC 2: Duyệt ĐỆ QUY toàn bộ doc.tables ────────────────────────────
+    # Tìm cột HĐ GV/HS (keyword hoặc index 2), nhóm theo Bước,
+    # chèn NLS cuối mỗi Bước; xử lý bảng lồng (nested tables).
 
-    # Nhãn NLS dùng biến động — phản ánh đúng môn học từng bài
-    label = (
-        f"Năng lực số tích hợp – {subject_name}"
-        if subject_name
-        else "Năng lực số tích hợp"
-    )
+    # Xây suggestion_map từ selected_items (để ưu tiên mã GV đã duyệt)
+    suggestion_map: dict[str, list] = {}
+    for item in selected_items:
+        act = (item.get("activity_name") or "").strip()
+        if act:
+            suggestion_map.setdefault(act, []).append(item)
 
+    visited: set[int] = set()
     for table in doc.tables:
-        if not _is_to_chuc_table(table):
-            continue
+        _process_table_recursive(
+            table, suggestion_map, subject_name, mon_code, visited
+        )
 
-        gv_col      = _find_gv_col(table)
-        found_table = True
-
-        for row_idx, row in enumerate(table.rows):
-            if row_idx == 0:                     # bỏ qua header
-                continue
-            if len(row.cells) <= gv_col:
-                continue
-
-            cell = row.cells[gv_col]
-            tc_id = id(cell._tc)
-            if tc_id in seen_tc_ids:             # merged cell
-                continue
-            seen_tc_ids.add(tc_id)
-
-            font_name, font_sz = _cell_font_info(cell)
-            paras = list(cell.paragraphs)        # snapshot trước khi chèn
-
-            # Nhóm đoạn theo từng Bước
-            buoc_groups = _group_by_buoc(paras)
-
-            if buoc_groups:
-                # ── Có cấu trúc Bước → chèn cuối mỗi Bước ───────────────
-                for group in buoc_groups:
-                    # Kiểm tra Bước này đã có NLS chưa
-                    last_para = paras[group["last_idx"]]
-                    buoc_paras = paras[group["head_idx"]: group["last_idx"] + 1]
-                    already    = any("năng lực số" in p.text.lower() for p in buoc_paras)
-                    if already:
-                        continue
-
-                    # Phân tích TOÀN BỘ nội dung Bước
-                    full_norm = _norm(group["full_text"])
-                    has_dig   = any(_norm(kw) in full_norm for kw in _DIGITAL_KW)
-
-                    # Nếu không rõ công cụ số → vẫn chèn nếu selected_items có mã
-                    nls_items: list[dict] = []
-                    if selected_items:
-                        nls_items = _filter_items_for_para(full_norm, selected_items)
-                    if not nls_items and has_dig:
-                        nls_items = _suggest_codes_from_lesson(
-                            full_norm, max_codes=2, mon=mon_code
-                        )
-                    if not nls_items:
-                        continue
-
-                    _insert_nls_block_inline(
-                        last_para._p, nls_items,
-                        font_name=font_name, font_sz=font_sz, label=label,
-                    )
-                    logger.info(f"NLS chèn cuối '{group['heading'][:50]}'")
-
-            else:
-                # ── Không có Bước → chèn cuối toàn bộ ô (nếu có công cụ số) ──
-                full_norm = _norm(" ".join(p.text for p in paras))
-                if not any(_norm(kw) in full_norm for kw in _DIGITAL_KW):
-                    continue
-                already = any("năng lực số" in p.text.lower() for p in paras)
-                if already:
-                    continue
-
-                nls_items = selected_items or _suggest_codes_from_lesson(
-                    full_norm, max_codes=2, mon=mon_code
-                )
-                if nls_items and paras:
-                    _insert_nls_block_inline(
-                        paras[-1]._p, nls_items[:2],
-                        font_name=font_name, font_sz=font_sz, label=label,
-                    )
-
-    if not found_table:
-        logger.info("Không tìm thấy bảng 'Tổ chức thực hiện'.")
+    logger.info(f"inject_competence_to_docx hoàn tất — đã xử lý {len(visited)} bảng.")
 
 
 # ── JSON builder cho format nghiêm ngặt ──────────────────────────────────────
