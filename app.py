@@ -3056,15 +3056,17 @@ async def _call_gemini_5512(doc_text: str, mon: str, cap: str) -> dict:
     Gọi Google Gemini API (miễn phí) để phân tích giáo án theo 5512.
     Ưu tiên dùng nếu GEMINI_API_KEY có sẵn.
     """
-    import google.generativeai as genai
+    from google import genai as _genai
     import json as _json
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model   = genai.GenerativeModel("gemini-1.5-flash")
-    prompt  = _build_5512_prompt(doc_text, mon, cap)
+    client = _genai.Client(api_key=GEMINI_API_KEY)
+    prompt = _build_5512_prompt(doc_text, mon, cap)
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model    = "gemini-2.0-flash",
+            contents = prompt,
+        )
         raw = response.text.strip()
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
