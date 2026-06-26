@@ -2382,6 +2382,62 @@ def _filter_items_for_para(text_norm: str, selected_items: list) -> list:
     return [it for _, it in scored[:2]]
 
 
+def _insert_nls_into_muc_tieu(
+    doc: Document, selected_items: list, mon_label: str, cap_label: str
+) -> None:
+    """
+    Chèn danh sách NLS tổng hợp vào cuối phần 'Năng lực' trong I. Mục tiêu.
+    Bỏ qua nếu NLS đã tồn tại trong các đoạn văn thông thường (ngoài bảng).
+    """
+    # Kiểm tra xem đã có NLS ở phần văn bản thường chưa (không đếm bảng)
+    for para in doc.paragraphs:
+        if "năng lực số" in para.text.lower():
+            logger.info("Mục tiêu đã có 'Năng lực số' — bỏ qua bước 1.")
+            return
+
+    ref_p = _find_insertion_wp(doc)
+    if ref_p is None:
+        return
+
+    # Nhóm items theo activity_name để hiển thị có cấu trúc
+    from collections import OrderedDict
+    groups: OrderedDict = OrderedDict()
+    ungrouped: list = []
+    for item in selected_items:
+        act  = (item.get("activity_name") or "").strip()
+        text = (item.get("text") or "").strip()
+        if not text:
+            continue
+        if act:
+            groups.setdefault(act, []).append(text)
+        else:
+            ungrouped.append(text)
+
+    # Chèn tiêu đề chính
+    lbl = f"- Năng lực số tích hợp ({mon_label} – {cap_label}):" if mon_label else \
+          "- Năng lực số tích hợp:"
+    header  = _make_wp(lbl, bold=True)
+    current = ref_p
+    current.addnext(header)
+    current = header
+
+    # Chèn theo nhóm hoạt động
+    for act_name, texts in groups.items():
+        sub = _make_wp(f"▸ {act_name}:", bold=True, indent_twips=200)
+        current.addnext(sub); current = sub
+        for text in texts:
+            row = _make_wp(f"+ {text}", indent_twips=480)
+            current.addnext(row); current = row
+
+    # Chèn các mục không thuộc nhóm nào
+    for text in ungrouped:
+        row = _make_wp(f"+ {text}", indent_twips=360)
+        current.addnext(row); current = row
+
+    logger.info(f"Đã chèn NLS vào phần Năng lực (Mục tiêu): "
+                f"{len(groups)} nhóm HĐ + {len(ungrouped)} mục chung.")
+
+
 def inject_competence_to_docx(
     doc: Document, selected_items: list, mon_label: str, cap_label: str
 ):
@@ -2398,6 +2454,10 @@ def inject_competence_to_docx(
     """
     mon_code = _detect_subject_from_doc(doc)
 
+    # ── BƯỚC 1: Chèn NLS tổng hợp vào cuối phần Năng lực (I. Mục tiêu) ──────
+    _insert_nls_into_muc_tieu(doc, selected_items, mon_label, cap_label)
+
+    # ── BƯỚC 2: Chèn NLS inline vào bảng tiến trình ──────────────────────────
     found_table  = False
     seen_tc_ids: set[int] = set()   # tránh xử lý merged cell nhiều lần
 
