@@ -1572,6 +1572,24 @@ def _cleanup(path: str):
     except: pass
 
 
+def _open_docx_safe(path: str) -> Document:
+    """
+    Mở file .docx với xử lý lỗi rõ ràng.
+    Ném HTTPException 422 nếu file là .doc cũ hoặc bị lỗi cấu trúc.
+    """
+    try:
+        return Document(path)
+    except Exception as e:
+        es = str(e).lower()
+        if any(kw in es for kw in ("package not found", "not a zip", "badzip", "zipfile")):
+            raise HTTPException(
+                422,
+                "File không đúng định dạng .docx (có thể là file .doc cũ hoặc bị lỗi cấu trúc). "
+                "Hãy mở bằng Word/WPS → Lưu lại dạng .docx rồi upload lại."
+            )
+        raise HTTPException(422, f"Không mở được file Word: {e}")
+
+
 @app.post("/process")
 async def process_file(
     background_tasks: BackgroundTasks,
@@ -2963,6 +2981,7 @@ async def analyze_nls_strict_endpoint(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
 
 _5512_STEPS = {
     "buoc_1": "Bước 1: Xác định vấn đề / Nhiệm vụ học tập",
@@ -3032,8 +3051,42 @@ NHIỆM VỤ: Phân tích giáo án {mon_name}{' – ' + cap_name if cap_name el
 """
 
 
+async def _call_gemini_5512(doc_text: str, mon: str, cap: str) -> dict:
+    """
+    Gọi Google Gemini API (miễn phí) để phân tích giáo án theo 5512.
+    Ưu tiên dùng nếu GEMINI_API_KEY có sẵn.
+    """
+    import google.generativeai as genai
+    import json as _json
+
+    genai.configure(api_key=GEMINI_API_KEY)
+    model   = genai.GenerativeModel("gemini-1.5-flash")
+    prompt  = _build_5512_prompt(doc_text, mon, cap)
+
+    try:
+        response = model.generate_content(prompt)
+        raw = response.text.strip()
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+        raise HTTPException(500, f"Gemini API lỗi: {e}")
+
+    # Bóc JSON từ response
+    import re as _re
+    m = _re.search(r'\{[\s\S]*\}', raw)
+    if m:
+        raw = m.group()
+
+    try:
+        result = _json.loads(raw)
+    except _json.JSONDecodeError:
+        logger.error(f"Gemini JSON parse failed: {raw[:300]}")
+        raise HTTPException(500, "Gemini trả về JSON không hợp lệ. Thử lại.")
+
+    return result
+
+
 async def _call_claude_5512(doc_text: str, mon: str, cap: str) -> dict:
-    """Gọi Claude API để phân tích và chuẩn hóa giáo án theo 5512."""
+    """Gọi Claude API (Anthropic) để phân tích giáo án theo 5512."""
     if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY.startswith("sk-ant-..."):
         raise HTTPException(
             503,
@@ -3104,12 +3157,35 @@ async def convert_5512_endpoint(
     tmp.write(await file.read()); tmp.close()
 
     try:
-        doc      = Document(tmp.name)
+        try:
+            doc = Document(tmp.name)
+        except Exception as open_err:
+            err_str = str(open_err).lower()
+            if "package not found" in err_str or "not a zip file" in err_str or "badzip" in err_str:
+                raise HTTPException(
+                    422,
+                    "File không đúng định dạng .docx (có thể là file .doc cũ hoặc bị lỗi). "
+                    "Vui lòng mở file bằng Microsoft Word → Lưu lại dưới dạng "
+                    "'.docx (Word Document)' rồi thử lại."
+                )
+            raise HTTPException(422, f"Không mở được file: {open_err}")
+
         doc_text = extract_doc_text(doc)
         if not doc_text.strip():
-            raise HTTPException(422, "Không đọc được nội dung file.")
+            raise HTTPException(422, "File trống hoặc không đọc được nội dung văn bản.")
 
-        result = await _call_claude_5512(doc_text, mon, cap)
+        # Ưu tiên Gemini (miễn phí) → fallback Claude (nếu có key)
+        if GEMINI_API_KEY:
+            result = await _call_gemini_5512(doc_text, mon, cap)
+        elif ANTHROPIC_API_KEY and not ANTHROPIC_API_KEY.startswith("sk-ant-..."):
+            result = await _call_claude_5512(doc_text, mon, cap)
+        else:
+            raise HTTPException(
+                503,
+                "Chưa cấu hình AI API. Hãy thêm GEMINI_API_KEY vào "
+                "Render → Environment rồi Save Changes."
+            )
+
         return JSONResponse(result)
 
     except HTTPException:
