@@ -2343,13 +2343,14 @@ _DIGITAL_KW = [
 
 def _group_by_buoc(paragraphs: list) -> list[dict]:
     """
-    Nhóm các đoạn văn trong ô theo từng 'Bước' (hoặc 'Hoạt động').
-    Trả về: [{"heading": str, "head_idx": int, "last_idx": int, "full_text": str}, ...]
-
-    Nhận dạng heading: "Bước 1:", "Bước 2:", "B1:", "Hoạt động 1:", v.v.
+    Nhóm các đoạn văn theo từng Bước / Step.
+    Nhận dạng heading:
+      - "Bước 1:", "Bước 2:", "B1:", "Hoạt động 1:" (kiểu bảng)
+      - "#1:", "#2:", "#3:", "#4:"               (kiểu đoạn văn Toán)
+      - "Step 1:", "Task 1:"
     """
     STEP_RE = re.compile(
-        r'^(?:bước|buoc|b\.?\s*|hoat dong|hoạt động)\s*\d+',
+        r'^(?:bước|buoc|b\.?\s*|hoat dong|hoạt động|step|task|#)\s*\d+',
         re.IGNORECASE | re.UNICODE
     )
 
@@ -2639,6 +2640,107 @@ def _process_table_recursive(
                     logger.info(f"NLS → cuối ô (row {row_idx})")
 
 
+def _process_paragraphs_for_nls(
+    doc: Document,
+    suggestion_map: dict,
+    subject_name: str,
+    mon_code: str,
+) -> None:
+    """
+    Xử lý giáo án CÓ CẤU TRÚC ĐOẠN VĂN (không phải bảng).
+    Ví dụ: Giáo án Toán dùng #1:, #2:, #3:, #4: dưới "b) Tổ chức thực hiện".
+
+    Thuật toán:
+    1. Tìm các đoạn văn "Tổ chức thực hiện" (heading).
+    2. Gom các đoạn tiếp theo thành các step-block theo #N: / Bước N:.
+    3. Step-block nào có dùng công cụ số → chèn NLS sau đoạn cuối của block đó.
+    4. Bỏ qua nếu step-block đã có NLS.
+    """
+    # Patterns nhận diện
+    TO_CHUC_KW = [
+        "to chuc thuc hien", "b) to chuc", "tổ chức thực hiện",
+    ]
+    STEP_RE  = re.compile(
+        r'^(?:#\d+|bước\s*\d+|b\d+)[:\.\s]',
+        re.IGNORECASE | re.UNICODE,
+    )
+    # Major section headings (báo hiệu kết thúc phần Tổ chức thực hiện)
+    END_RE   = re.compile(
+        r'^(?:\d+\s*\.|[IVX]+\s*\.|[a-zà-ỹ]\)\s*(?:mục tiêu|sản phẩm)|'
+        r'hoạt động\s+\d+|activity\s+\d+)',
+        re.IGNORECASE | re.UNICODE,
+    )
+
+    paras = list(doc.paragraphs)
+
+    i = 0
+    while i < len(paras):
+        # --- Tìm "Tổ chức thực hiện" ---
+        text_norm = _norm(paras[i].text)
+        if not any(kw in text_norm for kw in TO_CHUC_KW):
+            i += 1
+            continue
+
+        # --- Ở trong phần Tổ chức thực hiện: gom step-blocks ---
+        i += 1
+        step_blocks: list[dict] = []   # [{start: int, paras: list}]
+        cur_block_start: int | None = None
+        cur_block_paras: list = []
+
+        while i < len(paras):
+            t = paras[i].text.strip()
+
+            # Kết thúc phần Tổ chức thực hiện
+            if END_RE.match(t) and (cur_block_paras or not t.startswith("#")):
+                break
+
+            # Bắt đầu step mới
+            if STEP_RE.match(t):
+                if cur_block_paras:
+                    step_blocks.append({
+                        "start": cur_block_start,
+                        "paras": cur_block_paras,
+                    })
+                cur_block_start = i
+                cur_block_paras = [paras[i]]
+            elif cur_block_start is not None:
+                cur_block_paras.append(paras[i])
+
+            i += 1
+
+        # Lưu step cuối
+        if cur_block_paras:
+            step_blocks.append({"start": cur_block_start, "paras": cur_block_paras})
+
+        # --- Xử lý từng step-block ---
+        for blk in step_blocks:
+            blk_text = " ".join(p.text for p in blk["paras"])
+            blk_norm = _norm(blk_text)
+
+            # Bỏ qua nếu không có công cụ số
+            if not any(_norm(kw) in blk_norm for kw in _DIGITAL_KW):
+                continue
+            # Bỏ qua nếu đã có NLS
+            if any("năng lực số" in p.text.lower() for p in blk["paras"]):
+                continue
+
+            # Lấy NLS phù hợp
+            nls = _match_or_suggest_nls(blk_norm, suggestion_map, mon_code)
+            if not nls:
+                continue
+
+            # Chèn sau đoạn cuối của step-block
+            last_para = blk["paras"][-1]
+            fn, fs = "Times New Roman", 13.0
+            if last_para.runs:
+                r0 = last_para.runs[0]
+                if r0.font.name: fn = r0.font.name
+                if r0.font.size: fs = r0.font.size.pt
+
+            _append_nls_to_para(last_para._p, nls, subject_name, fn, fs)
+            logger.info(f"[Para-NLS] Chèn sau '{last_para.text[:50]}'")
+
+
 def _insert_nls_into_muc_tieu(
     doc: Document, selected_items: list, mon_label: str, cap_label: str
 ) -> None:
@@ -2740,7 +2842,11 @@ def inject_competence_to_docx(
             table, suggestion_map, subject_name, mon_code, visited
         )
 
-    logger.info(f"inject_competence_to_docx hoàn tất — đã xử lý {len(visited)} bảng.")
+    # Xử lý giáo án cấu trúc ĐOẠN VĂN (như Toán: #1:, #2:, #3:...)
+    # Chạy song song — duplicate check bên trong hàm bảo vệ tránh chèn trùng
+    _process_paragraphs_for_nls(doc, suggestion_map, subject_name, mon_code)
+
+    logger.info(f"inject_competence_to_docx hoàn tất — {len(visited)} bảng + đoạn văn.")
 
 
 # ── JSON builder cho format nghiêm ngặt ──────────────────────────────────────
