@@ -2982,6 +2982,7 @@ async def analyze_nls_strict_endpoint(
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
+GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")   # Miễn phí, không cần thẻ
 
 _5512_STEPS = {
     "buoc_1": "Bước 1: Xác định vấn đề / Nhiệm vụ học tập",
@@ -3128,6 +3129,69 @@ async def _call_gemini_5512(doc_text: str, mon: str, cap: str) -> dict:
     return result
 
 
+async def _call_groq_5512(doc_text: str, mon: str, cap: str) -> dict:
+    """
+    Gọi Groq API (miễn phí, không cần thẻ) để phân tích giáo án theo 5512.
+    Model: llama-3.3-70b-versatile — tốc độ cao, hiểu tiếng Việt tốt.
+    """
+    import httpx
+    import json as _json
+
+    prompt  = _build_5512_prompt(doc_text, mon, cap)
+
+    payload = {
+        "model":       "llama-3.3-70b-versatile",
+        "messages":    [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+        "max_tokens":  4096,
+    }
+
+    async with httpx.AsyncClient(timeout=120) as http:
+        try:
+            r = await http.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type":  "application/json",
+                },
+                json=payload,
+            )
+        except Exception as e:
+            raise HTTPException(500, f"Groq kết nối thất bại: {e}")
+
+    if r.status_code == 429:
+        raise HTTPException(503, "Groq đạt giới hạn rate limit. Thử lại sau 30 giây.")
+    if r.status_code != 200:
+        raise HTTPException(500, f"Groq lỗi {r.status_code}: {r.text[:300]}")
+
+    raw = r.json()["choices"][0]["message"]["content"].strip()
+
+    # Bóc JSON từ response
+    import re as _re
+    m = _re.search(r'\{[\s\S]*\}', raw)
+    if m:
+        raw = m.group()
+
+    try:
+        result = _json.loads(raw)
+    except _json.JSONDecodeError:
+        logger.error(f"Groq JSON parse failed: {raw[:300]}")
+        raise HTTPException(500, "Groq trả về kết quả không đúng định dạng. Thử lại.")
+
+    # Validate mã NLS — chỉ giữ mã có trong BANG_TRA_CUU
+    for step in ("buoc_1", "buoc_2", "buoc_3", "buoc_4"):
+        s = result.get(step, {})
+        valid = []
+        for item in s.get("nls", []):
+            code = (item.get("ma") or "").strip()
+            if code in BANG_TRA_CUU_MAP:
+                item["mo_ta"] = BANG_TRA_CUU_MAP[code]["content"]
+                valid.append(item)
+        s["nls"] = valid
+
+    return result
+
+
 async def _call_claude_5512(doc_text: str, mon: str, cap: str) -> dict:
     """Gọi Claude API (Anthropic) để phân tích giáo án theo 5512."""
     if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY.startswith("sk-ant-..."):
@@ -3217,16 +3281,18 @@ async def convert_5512_endpoint(
         if not doc_text.strip():
             raise HTTPException(422, "File trống hoặc không đọc được nội dung văn bản.")
 
-        # Ưu tiên Gemini (miễn phí) → fallback Claude (nếu có key)
-        if GEMINI_API_KEY:
+        # Ưu tiên: Groq (miễn phí) → Gemini → Claude
+        if GROQ_API_KEY:
+            result = await _call_groq_5512(doc_text, mon, cap)
+        elif GEMINI_API_KEY:
             result = await _call_gemini_5512(doc_text, mon, cap)
         elif ANTHROPIC_API_KEY and not ANTHROPIC_API_KEY.startswith("sk-ant-..."):
             result = await _call_claude_5512(doc_text, mon, cap)
         else:
             raise HTTPException(
                 503,
-                "Chưa cấu hình AI API. Hãy thêm GEMINI_API_KEY vào "
-                "Render → Environment rồi Save Changes."
+                "Chưa cấu hình AI API. Thêm GROQ_API_KEY (miễn phí tại console.groq.com) "
+                "vào Render → Environment rồi Save Changes."
             )
 
         return JSONResponse(result)
