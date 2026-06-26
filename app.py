@@ -3063,12 +3063,12 @@ async def _call_gemini_5512(doc_text: str, mon: str, cap: str) -> dict:
     client = _genai.Client(api_key=GEMINI_API_KEY)
     prompt = _build_5512_prompt(doc_text, mon, cap)
 
-    # Thử lần lượt các model — nếu quota hết thì đổi sang model khác
+    # Thử lần lượt các model đang hoạt động (2025)
     MODELS_TO_TRY = [
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
+        "gemini-2.5-flash-lite-preview-06-17",
+        "gemini-2.5-flash",
     ]
     raw = None
     last_err = None
