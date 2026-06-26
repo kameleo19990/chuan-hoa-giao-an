@@ -2992,19 +2992,60 @@ _5512_STEPS = {
 }
 
 
-def _build_nls_reference() -> str:
-    """Xây chuỗi tham chiếu 109 mã NLS dạng compact cho prompt Claude."""
-    lines = []
+def _build_nls_reference(mon: str = "") -> str:
+    """
+    Xây chuỗi tham chiếu NLS compact — lọc theo môn để giảm token.
+    Nếu không có môn cụ thể → lấy 40 mã đại diện cho tất cả 6 lĩnh vực.
+    """
+    subj_cfg = SUBJECT_NLS_PRIORITY.get(mon, {})
+    priority_codes = set(subj_cfg.get("priority_codes", []))
+    priority_secs  = set(subj_cfg.get("priority_sections", []))
+
+    # Chọn mã ưu tiên theo môn + đủ 6 lĩnh vực
+    selected: list[dict] = []
+    added_codes: set = set()
+
+    # 1. Thêm mã ưu tiên của môn trước
     for item in BANG_TRA_CUU:
-        lines.append(f"{item['code']}: {item['content']}")
-    return "\n".join(lines)
+        if item["code"] in priority_codes:
+            selected.append(item)
+            added_codes.add(item["code"])
+
+    # 2. Thêm mã theo section ưu tiên (tối đa 4 mã/section)
+    sec_count: dict = {}
+    for item in BANG_TRA_CUU:
+        if item["code"] in added_codes:
+            continue
+        sec = item["section"]
+        if sec in priority_secs and sec_count.get(sec, 0) < 4:
+            selected.append(item)
+            added_codes.add(item["code"])
+            sec_count[sec] = sec_count.get(sec, 0) + 1
+
+    # 3. Bổ sung đại diện 6 lĩnh vực (2 mã/lĩnh vực) đến khi đủ ~40 mã
+    cat_count: dict = {}
+    for item in BANG_TRA_CUU:
+        if len(selected) >= 42:
+            break
+        if item["code"] in added_codes:
+            continue
+        cat = item["category"]
+        if cat_count.get(cat, 0) < 3:
+            selected.append(item)
+            added_codes.add(item["code"])
+            cat_count[cat] = cat_count.get(cat, 0) + 1
+
+    return "\n".join(f"{i['code']}: {i['content']}" for i in selected)
 
 
 def _build_5512_prompt(doc_text: str, mon: str, cap: str) -> str:
-    """Xây prompt yêu cầu Claude phân tích giáo án → JSON chuẩn 5512 + NLS."""
+    """Xây prompt phân tích giáo án → JSON chuẩn 5512 + NLS. Tối ưu token."""
     mon_name  = MON_LABELS.get(mon, mon) or "môn học"
     cap_name  = CAP_LABELS.get(cap, cap) or ""
-    nls_ref   = _build_nls_reference()
+    nls_ref   = _build_nls_reference(mon)   # Lọc theo môn → ít token hơn
+
+    # Giới hạn độ dài tài liệu để tránh vượt token limit
+    doc_snippet = doc_text[:7000] if len(doc_text) > 7000 else doc_text
 
     return f"""Bạn là chuyên gia giáo dục phổ thông Việt Nam, thành thạo Công văn 5512/BGDĐT.
 
@@ -3048,7 +3089,7 @@ NHIỆM VỤ: Phân tích giáo án {mon_name}{' – ' + cap_name if cap_name el
 }}
 
 ═══ GIÁO ÁN GỐC ═══
-{doc_text[:12000]}
+{doc_snippet}
 """
 
 
@@ -3140,7 +3181,7 @@ async def _call_groq_5512(doc_text: str, mon: str, cap: str) -> dict:
     prompt  = _build_5512_prompt(doc_text, mon, cap)
 
     payload = {
-        "model":       "llama-3.3-70b-versatile",
+        "model":       "llama-3.1-8b-instant",   # 30K TPM limit vs 12K của 70B
         "messages":    [{"role": "user", "content": prompt}],
         "temperature": 0.3,
         "max_tokens":  4096,
