@@ -1028,58 +1028,80 @@ let _pickerCb = null;
 
 function _showCodePicker(anchorEl, onSelect) {
   document.getElementById('nls-code-picker')?.remove();
-  if (!frameworkCodes.length) { onSelect(null); return; }
+
+  // Nếu chưa có mã nào → thử load lại từ server rồi mới hiện picker
+  if (!frameworkCodes.length) {
+    _loadBTCCodes().then(() => {
+      if (frameworkCodes.length) _showCodePicker(anchorEl, onSelect);
+      else onSelect(null);
+    });
+    return;
+  }
 
   _pickerCb = onSelect;
   const picker = document.createElement('div');
   picker.id = 'nls-code-picker';
-  picker.className = 'fixed z-50 bg-white border border-indigo-200 rounded-2xl shadow-2xl p-2 w-72 max-h-64 overflow-y-auto animate-fadein';
+  // max-h-72 thay vì max-h-64 để hiện rõ hơn; overflow-y-auto để scroll
+  picker.className = 'fixed z-[9999] bg-white border border-indigo-200 rounded-2xl shadow-2xl p-2 w-80 max-h-72 overflow-y-auto animate-fadein';
 
   picker.innerHTML = `
-    <p class="text-xs font-black text-indigo-600 mb-1.5 px-1">🔖 Chọn mã từ khung NLS:</p>
+    <div class="flex items-center justify-between px-1 mb-1.5">
+      <p class="text-xs font-black text-indigo-600">🔖 Chọn mã NLS (${frameworkCodes.length} mã)</p>
+      <button id="cp-close" class="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+    </div>
     <input id="cp-search" type="text" placeholder="🔍 Tìm mã hoặc nội dung..."
       class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-2">
     <div id="cp-list" class="space-y-0.5"></div>
-    ${frameworkFileName
-      ? `<div class="border-t border-gray-100 mt-1.5 pt-1.5">
-           <p class="text-xs text-gray-400 px-2 py-1 italic">
-             📋 Chỉ dùng mã từ "${frameworkFileName}"
-           </p>
-         </div>`
-      : `<div class="border-t border-gray-100 mt-1.5 pt-1.5">
-           <button id="cp-custom" class="w-full text-left text-xs text-gray-400 hover:text-indigo-600 font-bold py-1 px-2 rounded-lg hover:bg-indigo-50 transition">
-             ✏️ Nhập mã tùy chỉnh...
-           </button>
-         </div>`
-    }`;
+    <div class="border-t border-gray-100 mt-1.5 pt-1.5">
+      <button id="cp-custom" class="w-full text-left text-xs text-gray-400 hover:text-indigo-600 font-bold py-1 px-2 rounded-lg hover:bg-indigo-50 transition">
+        ✏️ Nhập mã tùy chỉnh...
+      </button>
+    </div>`;
 
-  const rect = anchorEl.getBoundingClientRect();
-  picker.style.cssText = `top:${rect.bottom + 4}px; left:${Math.min(rect.left, window.innerWidth - 296)}px;`;
+  // Định vị thông minh: ưu tiên xuất hiện DƯỚI button,
+  // nếu không đủ chỗ thì lật lên TRÊN
+  const rect   = anchorEl.getBoundingClientRect();
+  const PH     = 300;  // chiều cao ước tính của picker
+  const PW     = 320;
+  const spBelow = window.innerHeight - rect.bottom - 8;
+  const top    = spBelow >= PH ? rect.bottom + 4 : Math.max(4, rect.top - PH - 4);
+  const left   = Math.min(rect.left, window.innerWidth - PW - 8);
+  picker.style.cssText = `top:${top}px; left:${Math.max(4, left)}px;`;
   document.body.appendChild(picker);
 
   function renderList(q) {
     const hits = q
-      ? frameworkCodes.filter(c => c.code.toLowerCase().includes(q) || c.content.toLowerCase().includes(q))
+      ? frameworkCodes.filter(c =>
+          (c.code || '').toLowerCase().includes(q) ||
+          (c.content || '').toLowerCase().includes(q))
       : frameworkCodes;
-    document.getElementById('cp-list').innerHTML = hits.map((c, i) => `
-      <button data-idx="${i}" class="cp-row w-full text-left flex items-start gap-2 hover:bg-indigo-50 rounded-xl px-2 py-1.5 transition">
+    const listEl = document.getElementById('cp-list');
+    if (!listEl) return;
+    listEl.innerHTML = hits.slice(0, 60).map((c, i) => `
+      <button data-idx="${frameworkCodes.indexOf(c)}" class="cp-row w-full text-left flex items-start gap-2 hover:bg-indigo-50 rounded-xl px-2 py-1.5 transition">
         <code class="bg-indigo-100 text-indigo-700 font-black text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0 mt-0.5">${c.code}</code>
-        <span class="text-xs text-gray-600 font-semibold leading-snug">${c.content.substring(0,65)}${c.content.length>65?'…':''}</span>
+        <span class="text-xs text-gray-600 font-semibold leading-snug">${(c.content||'').substring(0,70)}${(c.content||'').length>70?'…':''}</span>
       </button>`).join('');
-    document.querySelectorAll('.cp-row').forEach(btn =>
-      btn.addEventListener('click', () => { _pickerCb?.(frameworkCodes[+btn.dataset.idx]); picker.remove(); })
+    listEl.querySelectorAll('.cp-row').forEach(btn =>
+      btn.addEventListener('click', () => {
+        _pickerCb?.(frameworkCodes[+btn.dataset.idx]);
+        picker.remove();
+      })
     );
   }
 
   renderList('');
-  document.getElementById('cp-search').addEventListener('input', e => renderList(e.target.value.toLowerCase().trim()));
-  document.getElementById('cp-search').focus();
+  const searchEl = document.getElementById('cp-search');
+  searchEl?.addEventListener('input', e => renderList(e.target.value.toLowerCase().trim()));
+  searchEl?.focus();
   document.getElementById('cp-custom')?.addEventListener('click', () => { _pickerCb?.(null); picker.remove(); });
+  document.getElementById('cp-close')?.addEventListener('click',  () => picker.remove());
+
   setTimeout(() => {
     document.addEventListener('click', function close(e) {
       if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); }
     });
-  }, 150);
+  }, 200);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1152,7 +1174,7 @@ function _makeActivitySection(type, name, items) {
     <p class="${cl.head} font-black text-xs">${cfg.icon} ${name}</p>
     <button onclick="addCustomItem(this.closest('.activity-section'), this)"
       class="text-xs ${cl.head} opacity-60 hover:opacity-100 font-bold transition flex items-center gap-1">
-      ${frameworkCodes.length ? '🔖' : '+'} Thêm${frameworkCodes.length ? ' mã' : ''}
+      🔖 Thêm mã
     </button>`;
   sec.appendChild(hdr);
 
