@@ -62,24 +62,85 @@
 <!-- ══════════════════════════════════════════════════════════════════
      MÀN HÌNH ĐĂNG NHẬP
 ══════════════════════════════════════════════════════════════════ -->
-<div id="login-screen" class="hidden min-h-screen flex flex-col items-center justify-center px-4">
+<div id="login-screen" class="hidden min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-b from-blue-50 to-white">
+
+  <!-- ── Before/After Demo ───────────────────────────────── -->
+  <div class="w-full max-w-2xl mb-6 animate-fadein">
+    <p class="text-center text-blue-700 font-black text-lg mb-3">✨ Kết quả trong 10 giây</p>
+    <div class="grid grid-cols-2 gap-3">
+
+      <!-- BEFORE -->
+      <div class="bg-white rounded-2xl border-2 border-red-200 p-3 shadow-sm">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="bg-red-100 text-red-600 font-black text-xs px-2 py-0.5 rounded-full">TRƯỚC</span>
+          <span class="text-gray-400 text-xs">File gốc của GV</span>
+        </div>
+        <div class="text-xs leading-relaxed font-mono text-gray-500 bg-gray-50 rounded-xl p-2 space-y-0.5">
+          <p class="font-sans text-[11px]" style="font-family:Arial;font-size:11px">I. MỤC TIÊU</p>
+          <p class="font-sans text-[10px]" style="font-family:Arial;font-size:10px">1. Kiến thức: HS biết định nghĩa...</p>
+          <p class="font-sans text-[10px]" style="font-family:Arial;font-size:10px">2. Năng lực: Tư duy logic</p>
+          <p class="font-sans text-[11px] mt-1" style="font-family:Arial;font-size:11px">II. Thiết bị dạy học</p>
+          <p class="font-sans text-[9px]" style="font-family:Arial;font-size:9px">- SGK, thước kẻ, bảng phụ</p>
+          <p class="font-sans text-[10px] mt-1 text-red-500" style="font-family:Arial">Diện tích S = a2 + b2</p>
+          <div class="mt-1 text-red-400 text-[9px]">⚠ Font Arial · Lề sai · Công thức sai · Thiếu NLS</div>
+        </div>
+      </div>
+
+      <!-- AFTER -->
+      <div class="bg-white rounded-2xl border-2 border-emerald-300 p-3 shadow-sm">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="bg-emerald-100 text-emerald-700 font-black text-xs px-2 py-0.5 rounded-full">SAU</span>
+          <span class="text-gray-400 text-xs">Sau khi xử lý</span>
+        </div>
+        <div class="text-xs leading-relaxed bg-emerald-50 rounded-xl p-2 space-y-0.5">
+          <p class="font-bold text-gray-800 text-[11px]">I. MỤC TIÊU</p>
+          <p class="text-gray-700 text-[10px]">1. Kiến thức: HS biết định nghĩa...</p>
+          <p class="text-gray-700 text-[10px]">2. Năng lực: Tư duy logic</p>
+          <p class="text-emerald-700 font-bold text-[10px]">3. Năng lực số (NLS):</p>
+          <p class="text-emerald-600 text-[9px]">1.1TC1a – Tìm kiếm thông tin</p>
+          <p class="text-gray-700 font-bold text-[11px] mt-1">II. Thiết bị dạy học</p>
+          <p class="text-blue-700 font-bold text-[10px] mt-1">Diện tích S = a² + b²</p>
+          <div class="mt-1 text-emerald-600 text-[9px]">✅ Times New Roman 14pt · Lề chuẩn · Công thức đúng · NLS tích hợp</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature pills -->
+    <div class="flex flex-wrap justify-center gap-2 mt-3">
+      <span class="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">✅ Font Times New Roman 14pt</span>
+      <span class="bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-full">✅ 109 mã NLS chuẩn Bộ GD</span>
+      <span class="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full">✅ Chuẩn Công văn 5512</span>
+    </div>
+  </div>
+
+  <!-- ── Login card ──────────────────────────────────────── -->
   <div class="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center animate-fadein">
-    <!-- Icon -->
-    <div class="flex justify-center mb-4">
-      <svg class="w-16 h-16 animate-wiggle drop-shadow" viewBox="0 0 64 64" fill="none">
+    <div class="flex justify-center mb-3">
+      <svg class="w-12 h-12 animate-wiggle drop-shadow" viewBox="0 0 64 64" fill="none">
         <rect x="22" y="6" width="20" height="44" rx="4" fill="#FBBF24" stroke="#F59E0B" stroke-width="2"/>
         <polygon points="22,50 42,50 32,62" fill="#F87171" stroke="#EF4444" stroke-width="1.5"/>
         <rect x="22" y="6" width="20" height="8" rx="4" fill="#E5E7EB" stroke="#D1D5DB" stroke-width="2"/>
         <rect x="29" y="14" width="6" height="28" rx="3" fill="#FDE68A"/>
       </svg>
     </div>
-    <h1 class="text-2xl font-black text-blue-700 mb-1">Công Cụ Soạn Thảo Giáo Án</h1>
-    <p class="text-gray-400 text-sm font-semibold mb-7">Đăng nhập để bắt đầu sử dụng miễn phí</p>
+    <h1 class="text-xl font-black text-blue-700 mb-1">Công Cụ Soạn Thảo Giáo Án</h1>
+
+    <!-- Nút dùng thử — nổi bật nhất -->
+    <button onclick="enterGuestMode()"
+      class="w-full mt-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-base rounded-2xl py-3.5 px-4 transition-all duration-200 hover:scale-105 active:scale-95 shadow-md">
+      🚀 Dùng thử ngay — không cần đăng nhập
+    </button>
+    <p class="text-gray-400 text-xs mt-1.5 mb-4">Miễn phí · 1 file · Chỉ tab Chuẩn hóa định dạng</p>
+
+    <div class="flex items-center gap-2 mb-4">
+      <div class="flex-1 h-px bg-gray-200"></div>
+      <span class="text-gray-400 text-xs font-bold">hoặc đăng nhập để dùng đầy đủ</span>
+      <div class="flex-1 h-px bg-gray-200"></div>
+    </div>
 
     <!-- Google login -->
     <button id="btn-google" onclick="signInGoogle()"
-      class="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 hover:border-blue-400 hover:shadow-md text-gray-700 font-black text-base rounded-2xl py-3 px-4 transition-all duration-200 hover:scale-105 active:scale-95">
-      <!-- Google icon SVG -->
+      class="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 hover:border-blue-400 hover:shadow-md text-gray-700 font-black text-sm rounded-2xl py-2.5 px-4 transition-all duration-200 hover:scale-105 active:scale-95">
       <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -95,7 +156,7 @@
     </div>
     <div id="login-err" class="hidden mt-3 text-red-500 font-bold text-sm"></div>
 
-    <div class="mt-6 flex items-center justify-center gap-4 text-xs text-gray-400 font-semibold">
+    <div class="mt-4 flex items-center justify-center gap-4 text-xs text-gray-400 font-semibold">
       <span>✅ Miễn phí 5 file/tháng</span>
       <span>🔒 Không lưu file</span>
     </div>
@@ -106,6 +167,20 @@
      APP CHÍNH (ẩn đến khi đăng nhập)
 ══════════════════════════════════════════════════════════════════ -->
 <div id="main-app" class="hidden flex flex-col items-center px-4 py-8 min-h-screen">
+
+  <!-- Guest Banner (chỉ hiện khi dùng thử) -->
+  <div id="guest-banner" class="hidden w-full max-w-xl mb-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl px-4 py-3 animate-fadein">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <p class="text-emerald-700 font-black text-sm">🚀 Đang dùng thử (1 file)</p>
+        <p class="text-emerald-600 text-xs mt-0.5">Đăng nhập để dùng thêm 5 file/tháng miễn phí + Năng lực số + Chuẩn 5512</p>
+      </div>
+      <button onclick="signInGoogle()"
+        class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs px-3 py-2 rounded-xl transition-all hover:scale-105">
+        Đăng nhập
+      </button>
+    </div>
+  </div>
 
   <!-- User Header -->
   <div id="user-header" class="w-full max-w-xl mb-5 bg-white rounded-2xl shadow-sm border border-blue-100 px-4 py-3 flex items-center gap-3 animate-fadein">
@@ -510,6 +585,31 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════
+     MODAL GUEST THÀNH CÔNG
+══════════════════════════════════════════════════════════════════ -->
+<div id="guest-success-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+  <div class="bg-white rounded-3xl shadow-2xl p-7 max-w-sm w-full text-center animate-pop">
+    <div class="text-5xl mb-3">🎉</div>
+    <h2 class="text-xl font-black text-gray-800 mb-1">File đã được xử lý xong!</h2>
+    <p class="text-gray-500 text-sm mb-4">Bạn vừa trải nghiệm tính năng Chuẩn hóa định dạng.<br>Đăng nhập để mở thêm tính năng mạnh hơn:</p>
+    <div class="bg-emerald-50 rounded-2xl p-3 mb-5 text-left space-y-1.5">
+      <p class="text-sm font-bold text-emerald-700">✅ 5 file/tháng miễn phí</p>
+      <p class="text-sm font-bold text-blue-700">🎓 Năng lực số (NLS) tự động theo môn</p>
+      <p class="text-sm font-bold text-purple-700">📋 Chuẩn hóa theo Công văn 5512</p>
+      <p class="text-sm font-bold text-amber-700">🔖 109 mã NLS chuẩn Bộ GD&ĐT</p>
+    </div>
+    <button onclick="signInGoogle(); document.getElementById('guest-success-modal').classList.add('hidden')"
+      class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-base rounded-2xl py-3 transition-all hover:scale-105 mb-2">
+      Đăng nhập với Google — Miễn phí
+    </button>
+    <button onclick="document.getElementById('guest-success-modal').classList.add('hidden')"
+      class="text-gray-400 text-sm font-semibold hover:text-gray-600 transition-colors">
+      Tiếp tục dùng thử (đã hết lượt)
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
      MODAL NÂNG CẤP
 ══════════════════════════════════════════════════════════════════ -->
 <div id="upgrade-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
@@ -599,9 +699,38 @@ async function signOut() {
   onLoggedOut();
 }
 
+// ── Guest mode ────────────────────────────────────────────────────────────────
+let isGuestMode = false;
+
+function showGuestSuccessModal() {
+  document.getElementById('guest-success-modal')?.classList.remove('hidden');
+}
+
+function enterGuestMode() {
+  isGuestMode = true;
+  hide('login-screen');
+  show('main-app');
+  hide('user-header');
+  show('guest-banner');
+  // Khóa tab NLS và 5512 với tooltip
+  ['tab-nls', 'tab-5512'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('opacity-40', 'cursor-not-allowed');
+    el.setAttribute('title', 'Đăng nhập để dùng tính năng này');
+    el.onclick = e => { e.preventDefault(); e.stopPropagation();
+      document.getElementById('guest-banner')?.scrollIntoView({ behavior: 'smooth' }); };
+  });
+  switchTab('fmt');
+  setupDnD();
+}
+
 async function onLoggedIn(session) {
+  isGuestMode = false;
   hide("login-screen");
   show("main-app");
+  hide("guest-banner");
+  show("user-header");
   await loadUserInfo();
   setupDnD();
   setupDnD5512();            // Tab 3: Chuẩn hóa 5512
@@ -797,17 +926,20 @@ async function runFormat() {
   piv1 = setInterval(() => { if (pct < 85) { pct += Math.random()*7; bar.style.width = Math.min(pct,85)+"%"; } }, 350);
   try {
     const fd = new FormData(); fd.append("file", file1);
-    // timeout 3 phút — Render free tier xử lý chậm
     const ctrl = new AbortController();
     const tOut = setTimeout(() => ctrl.abort(), 180000);
+    // Guest mode → dùng endpoint public, không cần auth
+    const endpoint = isGuestMode ? "/process-guest" : "/process";
+    const fetchFn  = isGuestMode ? fetch : authFetch;
     const r  = await handleApiResponse(
-      await authFetch("/process", { method:"POST", body:fd, signal:ctrl.signal })
+      await fetchFn(endpoint, { method:"POST", body:fd, signal:ctrl.signal })
     );
     clearTimeout(tOut);
     clearInterval(piv1); bar.style.width="100%";
     await triggerDownload(r);
     hide("load1"); show("ok1");
-    await loadUserInfo();   // cập nhật quota
+    if (isGuestMode) showGuestSuccessModal();
+    else await loadUserInfo();   // cập nhật quota
   } catch(e) {
     clearInterval(piv1); hide("load1");
     if (e.message !== "quota_exceeded") showErr1("Có lỗi: " + e.message);
