@@ -3473,7 +3473,6 @@ def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str) -> Document:
 
 @app.post("/generate-5512-docx")
 async def generate_5512_docx_endpoint(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     mon:  str = Form(""),
     cap:  str = Form(""),
@@ -3483,7 +3482,7 @@ async def generate_5512_docx_endpoint(
     Phân tích giáo án thô → tạo file .docx chuẩn 5512 + NLS tích hợp.
     Trả về file .docx sẵn sàng sử dụng.
     """
-    _check_quota(user["sub"])
+    check_and_increment_quota(user["sub"])
 
     if not file.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Chỉ hỗ trợ .docx")
@@ -3512,22 +3511,29 @@ async def generate_5512_docx_endpoint(
         new_doc  = _make_5512_docx(analysis, mon_name, cap_name)
         new_doc.save(tmp_out)
 
+        # Đọc vào bộ nhớ rồi xóa file tạm ngay — tránh race condition với FileResponse
+        with open(tmp_out, "rb") as f:
+            file_bytes = f.read()
+        _cleanup(tmp_out)
+
         stem = os.path.splitext(file.filename)[0]
-        background_tasks.add_task(_cleanup, tmp_in.name)
-        background_tasks.add_task(_cleanup, tmp_out)
-        return FileResponse(
-            tmp_out,
+        out_name = f"{stem}_5512_chuanhoa.docx"
+
+        from fastapi.responses import Response as _Resp
+        return _Resp(
+            content=file_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename=f"{stem}_5512_chuanhoa.docx",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{out_name}"},
         )
 
     except HTTPException:
         raise
     except Exception as exc:
         logger.error(f"generate-5512-docx error: {exc}", exc_info=True)
-        raise HTTPException(500, f"Lỗi tạo file: {exc}")
+        raise HTTPException(500, f"Lỗi tạo file 5512: {type(exc).__name__}: {exc}")
     finally:
         _cleanup(tmp_in.name)
+        _cleanup(tmp_out)  # Dọn dẹp ngay cả khi có lỗi
 
 
 @app.get("/nls-codes")
