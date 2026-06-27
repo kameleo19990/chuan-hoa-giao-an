@@ -893,56 +893,23 @@ def process_docx(input_path, output_path):
 # NĂNG LỰC SỐ — INSERTION LOGIC
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _make_wp(text: str, bold: bool = False, indent_twips: int = 0) -> object:
-    """Tạo một <w:p> XML element chuẩn Times New Roman 14pt."""
-    p = OxmlElement("w:p")
-
-    pPr = OxmlElement("w:pPr")
-    spc = OxmlElement("w:spacing")
-    spc.set(qn("w:before"), "60"); spc.set(qn("w:after"), "60")
-    spc.set(qn("w:line"), "240"); spc.set(qn("w:lineRule"), "auto")  # Single
-    pPr.append(spc)
-    if indent_twips:
-        ind = OxmlElement("w:ind")
-        ind.set(qn("w:left"), str(indent_twips))
-        pPr.append(ind)
-    p.append(pPr)
-
-    r = OxmlElement("w:r")
-    rPr = OxmlElement("w:rPr")
-    rFonts = OxmlElement("w:rFonts")
-    for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
-        rFonts.set(qn(attr), "Times New Roman")
-    rPr.append(rFonts)
-    for tag in ("w:sz", "w:szCs"):
-        el = OxmlElement(tag); el.set(qn("w:val"), "28"); rPr.append(el)
-    if bold:
-        rPr.append(OxmlElement("w:b"))
-    r.append(rPr)
-
-    t = OxmlElement("w:t")
-    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-    t.text = text
-    r.append(t); p.append(r)
-    return p
+def _add_nls_line(para, text: str, bold: bool = False, italic: bool = False,
+                  font_name: str = "Times New Roman", font_sz: float = 14.0) -> None:
+    """Thêm một dòng NLS vào đoạn văn bằng line break — thuần python-docx API."""
+    br = para.add_run()
+    br.add_break()
+    r = para.add_run(text)
+    r.bold = bold; r.italic = italic
+    r.font.name = font_name; r.font.size = Pt(font_sz)
 
 
-def _find_insertion_wp(doc: Document):
+def _find_insertion_para(doc: Document):
     """
-    Tìm đoạn văn CUỐI của phần 'Năng lực' để chèn NLS vào SAU ĐÓ.
-
-    Thuật toán:
-    1. Tìm vị trí bắt đầu của phần 'Năng lực' (heading hoặc dòng chứa 'năng lực').
-    2. Quét tiếp đến khi gặp dòng đánh dấu kết thúc phần đó
-       (ví dụ: 'phẩm chất', 'thái độ', 'thiết bị', 'chuẩn bị', 'tiến trình').
-    3. Đoạn ngay trước khi gặp keyword kết thúc chính là vị trí chèn.
-
-    Kết quả: NLS được chèn vào CUỐI phần Năng lực, không phải ở giữa.
+    Tìm Paragraph CUỐI của phần 'Năng lực' để thêm NLS vào cuối đó.
+    Trả về đối tượng Paragraph (không phải ._p) để dùng với add_run().
     """
     paras = doc.paragraphs
 
-    # ── Từ khóa kết thúc phần Năng lực ────────────────────────────────────────
-    # Khi gặp những từ này → phần Năng lực đã kết thúc
     END_SECTION_KW = [
         "phẩm chất", "thái độ", "đức tính",
         "thiết bị", "học liệu", "đồ dùng",
@@ -952,40 +919,33 @@ def _find_insertion_wp(doc: Document):
         "kiểm tra", "đánh giá",
     ]
 
-    # ── Bước 1: Tìm vị trí đoạn bắt đầu phần 'Năng lực' ──────────────────────
     nl_start_idx: int | None = None
     for i, para in enumerate(paras[:60]):
         tl = para.text.strip().lower()
         if "năng lực" in tl:
-            nl_start_idx = i   # ghi nhận CUỐI cùng trong vùng tìm kiếm
+            nl_start_idx = i
 
     if nl_start_idx is None:
-        # Fallback 1: chèn sau đoạn chứa 'mục tiêu'
         for para in paras[:40]:
             if "mục tiêu" in para.text.lower():
-                return para._p
-        # Fallback 2: đoạn không rỗng đầu tiên
+                return para
         for para in paras:
             if para.text.strip():
-                return para._p
+                return para
         return None
 
-    # ── Bước 2: Quét tiếp từ nl_start_idx để tìm cuối phần Năng lực ──────────
     last_in_section = nl_start_idx
     for i in range(nl_start_idx + 1, min(nl_start_idx + 60, len(paras))):
         tl = paras[i].text.strip().lower()
         if not tl:
-            continue  # bỏ qua dòng trống
-
-        # Phát hiện keyword kết thúc phần Năng lực
+            continue
         if any(kw in tl for kw in END_SECTION_KW):
             break
+        last_in_section = i
 
-        last_in_section = i   # vẫn trong phần Năng lực → cập nhật
-
-    logger.debug(f"_find_insertion_wp: chèn sau đoạn [{last_in_section}] "
+    logger.debug(f"_find_insertion_para: cuối đoạn [{last_in_section}] "
                  f"'{paras[last_in_section].text.strip()[:60]}'")
-    return paras[last_in_section]._p
+    return paras[last_in_section]
 
 
 def insert_nang_luc_so(doc: Document, competencies: list, mon_label: str, cap_label: str):
@@ -999,20 +959,14 @@ def insert_nang_luc_so(doc: Document, competencies: list, mon_label: str, cap_la
             logger.info("Đã tồn tại mục 'Năng lực số' — bỏ qua chèn trùng.")
             return
 
-    ref_p = _find_insertion_wp(doc)
-    if ref_p is None:
+    ref_para = _find_insertion_para(doc)
+    if ref_para is None:
         logger.warning("Không tìm thấy vị trí chèn phù hợp.")
         return
 
-    # Tạo các đoạn (theo thứ tự ngược vì dùng addnext liên tiếp)
-    header  = _make_wp(f"- Năng lực số tích hợp ({mon_label} – {cap_label}):", bold=True)
-    items   = [_make_wp(f"+ {c}", indent_twips=360) for c in competencies]
-
-    # Chèn: header trước, rồi các mục theo thứ tự
-    current = ref_p
-    current.addnext(header); current = header
-    for item in items:
-        current.addnext(item); current = item
+    _add_nls_line(ref_para, f"- Năng lực số tích hợp ({mon_label} – {cap_label}):", bold=True)
+    for c in competencies:
+        _add_nls_line(ref_para, f"+ {c}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1485,34 +1439,25 @@ def insert_smart_nls(doc: Document, analysis: dict, mon_label: str, cap_label: s
             logger.info("Đã có 'Năng lực số' — bỏ qua chèn trùng.")
             return
 
-    ref_p = _find_insertion_wp(doc)
-    if ref_p is None:
+    ref_para = _find_insertion_para(doc)
+    if ref_para is None:
         return
 
-    # Tiêu đề chính (bold)
     header_text = (
         f"- Năng lực số tích hợp theo tiến trình bài dạy ({mon_label} – {cap_label}):"
         if analysis["activities"]
         else f"- Năng lực số tích hợp ({mon_label} – {cap_label}):"
     )
-    current = ref_p
-    header = _make_wp(header_text, bold=True)
-    current.addnext(header); current = header
+    _add_nls_line(ref_para, header_text, bold=True)
 
     if analysis["activities"]:
         for act in analysis["activities"]:
-            # Sub-header hoạt động (bold, thụt lề nhẹ)
-            sub = _make_wp(f"▸ {act['name']}:", bold=True, indent_twips=200)
-            current.addnext(sub); current = sub
-            # Các gợi ý NLS
+            _add_nls_line(ref_para, f"▸ {act['name']}:", bold=True)
             for item in act["nls"]:
-                row = _make_wp(f"+ {item}", indent_twips=480)
-                current.addnext(row); current = row
+                _add_nls_line(ref_para, f"    + {item}")
     else:
-        # Fallback: danh sách phẳng
         for item in analysis["fallback"]:
-            row = _make_wp(f"+ {item}", indent_twips=360)
-            current.addnext(row); current = row
+            _add_nls_line(ref_para, f"+ {item}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2217,41 +2162,30 @@ def _is_activity_table(table) -> bool:
 
 def _add_nls_row_to_table(table, nls_items: list) -> None:
     """
-    THÊM (không xóa) hàng NLS vào cuối bảng.
-    - KHÔNG dùng cell.text= (xóa nội dung cũ).
-    - KHÔNG gọi para.clear() trên hàng mới (tránh corruption khi add_row copy nội dung).
-    - Chỉ dùng add_paragraph() + add_run() để THÊM văn bản.
+    Thêm hàng NLS vào cuối bảng — thuần python-docx API.
+    Không can thiệp XML, không xóa nội dung cũ.
     """
     if not nls_items:
         return
     try:
         col_count = len(table.columns)
-        row       = table.add_row()
-        cells     = row.cells
+        row   = table.add_row()
+        cells = row.cells
 
-        # ── Cột 1: Nhãn (chỉ add_run, không clear) ──────────────────────────
-        # Hàng mới từ add_row() có thể copy nội dung hàng cuối → xóa sạch
-        # bằng cách xóa tất cả element <w:r> trong ô, rồi thêm mới
-        c0_tc = cells[0]._tc
-        for wp in list(c0_tc.iter(f"{{{W_NS}}}p")):
-            for wr in list(wp.iter(f"{{{W_NS}}}r")):
-                wp.remove(wr)
-        # Thêm nội dung nhãn vào đoạn đầu tiên của ô
-        p0 = cells[0].paragraphs[0]
+        # Cột 1: Nhãn
+        # Nếu ô rỗng dùng paragraphs[0], nếu có nội dung thêm bên dưới
+        if cells[0].text.strip() == "":
+            p0 = cells[0].paragraphs[0]
+        else:
+            p0 = cells[0].add_paragraph()
         r0 = p0.add_run("Năng lực số tích hợp (NLS):")
         r0.bold = True; r0.italic = True
         r0.font.name = "Times New Roman"; r0.font.size = Pt(13)
 
-        # ── Cột 2: Mã NLS + Công cụ (chỉ add, không clear) ─────────────────
+        # Cột 2: Mã NLS + Công cụ
         if col_count >= 2:
             c1 = cells[1]
-            # Xóa các run của hàng copy (từ add_row), giữ cấu trúc <w:p>
-            c1_tc = c1._tc
-            for wp in list(c1_tc.iter(f"{{{W_NS}}}p")):
-                for wr in list(wp.iter(f"{{{W_NS}}}r")):
-                    wp.remove(wr)
-
-            act_type       = (nls_items[0].get("activity_type") or "other") if nls_items else "other"
+            act_type       = (nls_items[0].get("activity_type") or "other")
             act_type_tools = ACTIVITY_TYPE_TOOLS.get(act_type, ACTIVITY_TYPE_TOOLS["other"])
             first = True
 
@@ -2265,20 +2199,21 @@ def _add_nls_row_to_table(table, nls_items: list) -> None:
                 extra      = [t for t in act_type_tools if t not in code_tools]
                 all_tools  = code_tools + extra[:2]
 
-                # Dòng 1: mã NLS — thêm vào đoạn đầu hoặc đoạn mới
-                p = c1.paragraphs[0] if first else c1.add_paragraph()
+                # Lần đầu: dùng paragraphs[0] nếu ô rỗng, sau đó add_paragraph()
+                if first and c1.text.strip() == "":
+                    p = c1.paragraphs[0]
+                else:
+                    p = c1.add_paragraph()
                 first = False
                 r_nl = p.add_run(text)
                 r_nl.font.name = "Times New Roman"; r_nl.font.size = Pt(13)
 
-                # Dòng 2: công cụ — luôn đoạn mới (add_paragraph)
                 if all_tools:
                     p_tool = c1.add_paragraph()
                     r_tool = p_tool.add_run(f"  ▶ Công cụ: {'; '.join(all_tools[:3])}")
                     r_tool.italic = True
                     r_tool.font.name = "Times New Roman"; r_tool.font.size = Pt(12)
 
-        # Nếu có > 2 cột → merge cột 2 trở đi
         if col_count > 2:
             try:
                 cells[1].merge(cells[col_count - 1])
@@ -2468,64 +2403,35 @@ def _has_nls_below(paragraphs: list, idx: int, window: int = 2) -> bool:
     return False
 
 
-def _make_nls_para_elem(text: str, bold=False, italic=False,
-                         font_name="Times New Roman", font_sz_pt=13.0):
-    """Tạo <w:p> để chèn inline vào ô bảng."""
-    p  = OxmlElement("w:p")
-    r  = OxmlElement("w:r")
-    rPr = OxmlElement("w:rPr")
-
-    rF = OxmlElement("w:rFonts")
-    for a in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
-        rF.set(qn(a), font_name)
-    rPr.append(rF)
-
-    for tag in ("w:sz", "w:szCs"):
-        el = OxmlElement(tag)
-        el.set(qn("w:val"), str(int(font_sz_pt * 2)))
-        rPr.append(el)
-
-    if bold:   rPr.append(OxmlElement("w:b"))
-    if italic: rPr.append(OxmlElement("w:i"))
-    r.append(rPr)
-
-    t = OxmlElement("w:t")
-    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-    t.text = text
-    r.append(t)
-    p.append(r)
-    return p
-
-
-def _insert_nls_block_inline(ref_elem, items: list,
-                              font_name: str, font_sz: float,
-                              label: str = "Năng lực số tích hợp"):
+def _append_nls_to_cell(
+    cell, nls_items: list, subject_name: str, font_name: str, font_sz: float
+) -> None:
     """
-    Chèn khối NLS gồm nhiều đoạn ngay SAU ref_elem (trong cùng ô bảng).
-    Dùng addnext theo thứ tự ngược để thứ tự cuối cùng đúng.
-    Kết quả: Label → Code1 → Tool1 → Code2 → Tool2 ...
+    Chèn khối NLS vào CUỐI ô bảng — chỉ dùng cell.add_paragraph() + add_run().
+    Không can thiệp XML, không xóa nội dung cũ.
     """
-    lines: list[tuple[str, bool, bool]] = [
-        (f"{label} (NLS):", True, True)
-    ]
-    for item in items[:2]:
-        code  = item.get("code", "")
+    label = (
+        f"Năng lực số tích hợp – {subject_name}"
+        if subject_name else "Năng lực số tích hợp"
+    )
+    p_lbl = cell.add_paragraph()
+    r_lbl = p_lbl.add_run(f"{label} (NLS):")
+    r_lbl.bold = True; r_lbl.italic = True
+    r_lbl.font.name = font_name; r_lbl.font.size = Pt(font_sz)
+
+    for item in nls_items[:2]:
         text  = (item.get("text") or "").strip()
+        code  = item.get("code", "")
         tools = item.get("tools") or CODE_TO_TOOLS.get(code, [])
-        if text:
-            lines.append((text, False, False))
+        if not text:
+            continue
+        p = cell.add_paragraph()
+        r2 = p.add_run(text)
+        r2.font.name = font_name; r2.font.size = Pt(font_sz)
         if tools:
-            lines.append((
-                f"  ▶ Công cụ thực hiện: {'; '.join(tools[:2])}",
-                False, True,
-            ))
-
-    # Chèn ngược để thứ tự cuối là đúng
-    current = ref_elem
-    for txt, bold, italic in reversed(lines):
-        new_p = _make_nls_para_elem(txt, bold=bold, italic=italic,
-                                     font_name=font_name, font_sz_pt=font_sz)
-        current.addnext(new_p)
+            p_t = cell.add_paragraph()
+            r_t = p_t.add_run(f"  ▶ Công cụ thực hiện: {'; '.join(tools[:2])}")
+            r_t.italic = True; r_t.font.name = font_name; r_t.font.size = Pt(font_sz)
 
 
 def _filter_items_for_para(text_norm: str, selected_items: list) -> list:
@@ -2589,19 +2495,6 @@ def _match_or_suggest_nls(cell_norm: str, suggestion_map: dict, mon_code: str) -
     return []
 
 
-def _append_nls_to_para(last_p_elem, nls_items: list,
-                          subject_name: str, font_name: str, font_sz: float):
-    """Gọi _insert_nls_block_inline với label đã giải quyết tên môn."""
-    label = (
-        f"Năng lực số tích hợp – {subject_name}"
-        if subject_name else "Năng lực số tích hợp"
-    )
-    _insert_nls_block_inline(
-        last_p_elem, nls_items,
-        font_name=font_name, font_sz=font_sz, label=label,
-    )
-
-
 def _process_table_recursive(
     table,
     suggestion_map: dict,
@@ -2657,24 +2550,22 @@ def _process_table_recursive(
             buoc_groups = _group_by_buoc(paras)
 
             if buoc_groups:
+                all_nls: list = []
                 for grp in buoc_groups:
-                    grp_paras  = paras[grp["head_idx"]: grp["last_idx"] + 1]
-                    grp_norm   = _norm(grp["full_text"])
-
-                    # Bỏ qua Bước đã có NLS
+                    grp_paras = paras[grp["head_idx"]: grp["last_idx"] + 1]
                     if any("năng lực số" in p.text.lower() for p in grp_paras):
                         continue
-
+                    grp_norm = _norm(grp["full_text"])
                     nls = _match_or_suggest_nls(grp_norm, suggestion_map, mon_code)
-                    if nls:
-                        last_para = paras[grp["last_idx"]]
-                        _append_nls_to_para(last_para._p, nls, subject_name, font_name, font_sz)
-                        logger.info(f"NLS → cuối '{grp['heading'][:50]}'")
+                    all_nls.extend(nls)
+                if all_nls:
+                    _append_nls_to_cell(cell, all_nls[:4], subject_name, font_name, font_sz)
+                    logger.info(f"NLS → cuối ô (row {row_idx}, {len(all_nls)} mã)")
             else:
                 # ── Không có Bước → chèn cuối toàn bộ ô ─────────────────
                 nls = _match_or_suggest_nls(cell_norm, suggestion_map, mon_code)
-                if nls and paras:
-                    _append_nls_to_para(paras[-1]._p, nls, subject_name, font_name, font_sz)
+                if nls:
+                    _append_nls_to_cell(cell, nls, subject_name, font_name, font_sz)
                     logger.info(f"NLS → cuối ô (row {row_idx})")
 
 
@@ -2775,8 +2666,21 @@ def _process_paragraphs_for_nls(
                 if r0.font.name: fn = r0.font.name
                 if r0.font.size: fs = r0.font.size.pt
 
-            _append_nls_to_para(last_para._p, nls, subject_name, fn, fs)
-            logger.info(f"[Para-NLS] Chèn sau '{last_para.text[:50]}'")
+            label = (f"Năng lực số tích hợp – {subject_name}"
+                     if subject_name else "Năng lực số tích hợp")
+            _add_nls_line(last_para, f"{label} (NLS):", bold=True, italic=True,
+                          font_name=fn, font_sz=fs)
+            for itm in nls[:2]:
+                itm_text  = (itm.get("text") or "").strip()
+                itm_code  = itm.get("code", "")
+                itm_tools = itm.get("tools") or CODE_TO_TOOLS.get(itm_code, [])
+                if itm_text:
+                    _add_nls_line(last_para, itm_text, font_name=fn, font_sz=fs)
+                if itm_tools:
+                    _add_nls_line(last_para,
+                                  f"  ▶ Công cụ: {'; '.join(itm_tools[:2])}",
+                                  italic=True, font_name=fn, font_sz=fs)
+            logger.info(f"[Para-NLS] Chèn vào '{last_para.text[:50]}'")
 
 
 def _insert_nls_into_muc_tieu(
@@ -2792,11 +2696,10 @@ def _insert_nls_into_muc_tieu(
             logger.info("Mục tiêu đã có 'Năng lực số' — bỏ qua bước 1.")
             return
 
-    ref_p = _find_insertion_wp(doc)
-    if ref_p is None:
+    ref_para = _find_insertion_para(doc)
+    if ref_para is None:
         return
 
-    # Nhóm items theo activity_name để hiển thị có cấu trúc
     from collections import OrderedDict
     groups: OrderedDict = OrderedDict()
     ungrouped: list = []
@@ -2810,30 +2713,22 @@ def _insert_nls_into_muc_tieu(
         else:
             ungrouped.append(text)
 
-    # Chèn tiêu đề chính — dùng biến động subject_name (= mon_label đã resolve)
     if mon_label and cap_label:
         lbl = f"- Năng lực số tích hợp ({mon_label} – {cap_label}):"
     elif mon_label:
         lbl = f"- Năng lực số tích hợp ({mon_label}):"
     else:
         lbl = "- Năng lực số tích hợp:"
-    header  = _make_wp(lbl, bold=True)
-    current = ref_p
-    current.addnext(header)
-    current = header
 
-    # Chèn theo nhóm hoạt động
+    _add_nls_line(ref_para, lbl, bold=True)
+
     for act_name, texts in groups.items():
-        sub = _make_wp(f"▸ {act_name}:", bold=True, indent_twips=200)
-        current.addnext(sub); current = sub
+        _add_nls_line(ref_para, f"▸ {act_name}:", bold=True)
         for text in texts:
-            row = _make_wp(f"+ {text}", indent_twips=480)
-            current.addnext(row); current = row
+            _add_nls_line(ref_para, f"    + {text}")
 
-    # Chèn các mục không thuộc nhóm nào
     for text in ungrouped:
-        row = _make_wp(f"+ {text}", indent_twips=360)
-        current.addnext(row); current = row
+        _add_nls_line(ref_para, f"  + {text}")
 
     logger.info(f"Đã chèn NLS vào phần Năng lực (Mục tiêu): "
                 f"{len(groups)} nhóm HĐ + {len(ungrouped)} mục chung.")
