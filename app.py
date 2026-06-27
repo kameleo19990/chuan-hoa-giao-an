@@ -2413,6 +2413,18 @@ def _has_nls_below(paragraphs: list, idx: int, window: int = 2) -> bool:
     return False
 
 
+_NLS_CODE_RE = re.compile(r'^([A-Z0-9][A-Z0-9.\-]+[a-z]?)\s*[–\-]')
+
+def _extract_code_from_item(item: dict) -> str:
+    """Lấy mã NLS từ item — ưu tiên field 'code', fallback parse từ 'text'."""
+    code = (item.get("code") or "").strip()
+    if not code:
+        m = _NLS_CODE_RE.match(item.get("text", ""))
+        if m:
+            code = m.group(1)
+    return code
+
+
 def _append_nls_to_cell(
     cell, nls_items: list, subject_name: str, font_name: str, font_sz: float
 ) -> None:
@@ -2431,7 +2443,7 @@ def _append_nls_to_cell(
 
     for item in nls_items[:2]:
         text  = (item.get("text") or "").strip()
-        code  = item.get("code", "")
+        code  = _extract_code_from_item(item)
         tools = item.get("tools") or CODE_TO_TOOLS.get(code, [])
         if not text:
             continue
@@ -2440,7 +2452,7 @@ def _append_nls_to_cell(
         r2.font.name = font_name; r2.font.size = Pt(font_sz)
         if tools:
             p_t = cell.add_paragraph()
-            r_t = p_t.add_run(f"  ▶ Công cụ thực hiện: {'; '.join(tools[:2])}")
+            r_t = p_t.add_run(f"  ▶ Công cụ thực hiện: {'; '.join(tools[:3])}")
             r_t.italic = True; r_t.font.name = font_name; r_t.font.size = Pt(font_sz)
 
 
@@ -2686,13 +2698,13 @@ def _process_paragraphs_for_nls(
                           font_name=fn, font_sz=fs)
             for itm in nls[:2]:
                 itm_text  = (itm.get("text") or "").strip()
-                itm_code  = itm.get("code", "")
+                itm_code  = _extract_code_from_item(itm)
                 itm_tools = itm.get("tools") or CODE_TO_TOOLS.get(itm_code, [])
                 if itm_text:
                     _add_nls_line(last_para, itm_text, font_name=fn, font_sz=fs)
                 if itm_tools:
                     _add_nls_line(last_para,
-                                  f"  ▶ Công cụ: {'; '.join(itm_tools[:2])}",
+                                  f"  ▶ Công cụ thực hiện: {'; '.join(itm_tools[:3])}",
                                   italic=True, font_name=fn, font_sz=fs)
             logger.info(f"[Para-NLS] Chèn vào '{last_para.text[:50]}'")
 

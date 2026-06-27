@@ -1362,7 +1362,7 @@ async function confirmAndCreateNLS() {
         const content = (item.querySelector('.item-text')?.textContent || '').trim();
         if (content && content !== 'Nhập nội dung năng lực số...') {
           const fullText = code ? `${code} – ${content}` : content;
-          selected.push({ activity_name: actName, text: fullText });
+          selected.push({ activity_name: actName, text: fullText, code: code });
         }
       }
     });
