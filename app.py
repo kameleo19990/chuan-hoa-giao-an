@@ -843,7 +843,11 @@ def _auto_insert_nls_in_activities(doc: Document, mon: str = "") -> None:
 
 def process_docx(input_path, output_path):
     import traceback
-    doc = Document(input_path)
+    doc = Document(input_path)   # MỞ FILE GỐC — không tạo Document() trống
+
+    # Ghi nhớ số bảng gốc để kiểm tra an toàn trước khi lưu
+    _orig_table_count = len(doc.tables)
+    _orig_para_count  = len(doc.paragraphs)
 
     # Bước 0: $...$ → OMML thật (từ Gemini/ChatGPT)
     try:
@@ -866,6 +870,21 @@ def process_docx(input_path, output_path):
         _auto_insert_nls_in_activities(doc)
     except Exception as e:
         logger.warning(f"auto_insert_nls: {e}\n{traceback.format_exc()}")
+
+    # ── KIỂM TRA AN TOÀN trước khi lưu ───────────────────────────────────────
+    final_tables = len(doc.tables)
+    final_paras  = len(doc.paragraphs)
+    if final_tables < _orig_table_count:
+        raise RuntimeError(
+            f"AN TOÀN: Số bảng giảm từ {_orig_table_count} → {final_tables}. "
+            "File bị mất dữ liệu — HỦY lưu để bảo toàn bản gốc."
+        )
+    if final_paras < _orig_para_count // 2:
+        raise RuntimeError(
+            f"AN TOÀN: Số đoạn văn giảm đột ngột ({_orig_para_count} → {final_paras}). "
+            "Có thể mất dữ liệu — HỦY lưu."
+        )
+    logger.info(f"process_docx OK: {final_tables} bảng, {final_paras} đoạn → lưu file.")
 
     doc.save(output_path)
 
@@ -2198,65 +2217,66 @@ def _is_activity_table(table) -> bool:
 
 def _add_nls_row_to_table(table, nls_items: list) -> None:
     """
-    Thêm hàng 'Năng lực số tích hợp' vào cuối bảng hoạt động.
-    Cột 1 (GV): nhãn in đậm nghiêng.
-    Cột 2 (HS): danh sách mã NLS (tối đa 5 mã).
+    THÊM (không xóa) hàng NLS vào cuối bảng.
+    - KHÔNG dùng cell.text= (xóa nội dung cũ).
+    - KHÔNG gọi para.clear() trên hàng mới (tránh corruption khi add_row copy nội dung).
+    - Chỉ dùng add_paragraph() + add_run() để THÊM văn bản.
     """
     if not nls_items:
         return
     try:
         col_count = len(table.columns)
-        row = table.add_row()
-        cells = row.cells
+        row       = table.add_row()
+        cells     = row.cells
 
-        # ── Cột 1: Nhãn ─────────────────────────────────────────────────────
+        # ── Cột 1: Nhãn (chỉ add_run, không clear) ──────────────────────────
+        # Hàng mới từ add_row() có thể copy nội dung hàng cuối → xóa sạch
+        # bằng cách xóa tất cả element <w:r> trong ô, rồi thêm mới
+        c0_tc = cells[0]._tc
+        for wp in list(c0_tc.iter(f"{{{W_NS}}}p")):
+            for wr in list(wp.iter(f"{{{W_NS}}}r")):
+                wp.remove(wr)
+        # Thêm nội dung nhãn vào đoạn đầu tiên của ô
         p0 = cells[0].paragraphs[0]
-        p0.clear()
         r0 = p0.add_run("Năng lực số tích hợp (NLS):")
-        r0.bold   = True
-        r0.italic = True
-        r0.font.name = "Times New Roman"
-        r0.font.size = Pt(13)
+        r0.bold = True; r0.italic = True
+        r0.font.name = "Times New Roman"; r0.font.size = Pt(13)
 
-        # ── Cột 2: Mã NLS + Công cụ kết hợp ────────────────────────────────
+        # ── Cột 2: Mã NLS + Công cụ (chỉ add, không clear) ─────────────────
         if col_count >= 2:
-            c1    = cells[1]
-            para  = c1.paragraphs[0]
-            para.clear()
-            first = True
+            c1 = cells[1]
+            # Xóa các run của hàng copy (từ add_row), giữ cấu trúc <w:p>
+            c1_tc = c1._tc
+            for wp in list(c1_tc.iter(f"{{{W_NS}}}p")):
+                for wr in list(wp.iter(f"{{{W_NS}}}r")):
+                    wp.remove(wr)
 
-            # Lấy loại hoạt động từ item đầu tiên → tra bảng công cụ theo loại HĐ
             act_type       = (nls_items[0].get("activity_type") or "other") if nls_items else "other"
             act_type_tools = ACTIVITY_TYPE_TOOLS.get(act_type, ACTIVITY_TYPE_TOOLS["other"])
+            first = True
 
             for item in nls_items[:5]:
-                text     = (item.get("text") or "").strip()
-                code     = (item.get("code") or "").strip()
+                text = (item.get("text") or "").strip()
+                code = (item.get("code") or "").strip()
                 if not text:
                     continue
 
-                # Công cụ: kết hợp (1) từ mã NLS + (2) từ loại HĐ, bỏ trùng
                 code_tools = item.get("tools") or CODE_TO_TOOLS.get(code, [])
                 extra      = [t for t in act_type_tools if t not in code_tools]
-                all_tools  = code_tools + extra[:2]   # tối đa = 3 từ mã + 2 từ loại HĐ
+                all_tools  = code_tools + extra[:2]
 
-                p = para if first else c1.add_paragraph()
-                if first:
-                    p.clear()
+                # Dòng 1: mã NLS — thêm vào đoạn đầu hoặc đoạn mới
+                p = c1.paragraphs[0] if first else c1.add_paragraph()
                 first = False
-
-                # Dòng 1: mã + nội dung năng lực (Times 13)
                 r_nl = p.add_run(text)
-                r_nl.font.name = "Times New Roman"
-                r_nl.font.size = Pt(13)
+                r_nl.font.name = "Times New Roman"; r_nl.font.size = Pt(13)
 
-                # Dòng 2: công cụ gợi ý cụ thể (in nghiêng, Times 12)
+                # Dòng 2: công cụ — luôn đoạn mới (add_paragraph)
                 if all_tools:
                     p_tool = c1.add_paragraph()
-                    r_tool = p_tool.add_run(f"  ▶ Công cụ thực hiện: {'; '.join(all_tools[:4])}")
-                    r_tool.italic    = True
-                    r_tool.font.name = "Times New Roman"
-                    r_tool.font.size = Pt(12)
+                    r_tool = p_tool.add_run(f"  ▶ Công cụ: {'; '.join(all_tools[:3])}")
+                    r_tool.italic = True
+                    r_tool.font.name = "Times New Roman"; r_tool.font.size = Pt(12)
 
         # Nếu có > 2 cột → merge cột 2 trở đi
         if col_count > 2:
