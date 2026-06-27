@@ -1554,6 +1554,31 @@ def _open_docx_safe(path: str) -> Document:
         raise HTTPException(422, f"Không mở được file Word: {e}")
 
 
+@app.post("/process-guest")
+async def process_file_guest(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+):
+    """Chuẩn hóa định dạng — không cần đăng nhập (dùng thử 1 lần)."""
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file .docx")
+    tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_in_path = tmp_in.name
+    tmp_in.write(await file.read()); tmp_in.close()
+    tmp_out_path = tmp_in_path.replace(".docx", "_out.docx")
+    try:
+        process_docx(tmp_in_path, tmp_out_path)
+    except Exception as exc:
+        _cleanup(tmp_in_path)
+        raise HTTPException(status_code=500, detail=f"Lỗi xử lý: {type(exc).__name__}: {exc}")
+    background_tasks.add_task(_cleanup, tmp_in_path)
+    background_tasks.add_task(_cleanup, tmp_out_path)
+    stem = os.path.splitext(file.filename)[0]
+    return FileResponse(tmp_out_path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=f"{stem}_chuanhoa.docx")
+
+
 @app.post("/process")
 async def process_file(
     background_tasks: BackgroundTasks,
