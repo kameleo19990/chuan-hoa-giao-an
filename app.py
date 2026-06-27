@@ -2286,6 +2286,11 @@ _ACTIVITY_TRIGGER_KW = [
     "tìm hiểu", "thực hành", "đánh giá",
     "bước 1", "bước 2", "bước 3", "bước 4", "bước 5",
     "tổ chức thực hiện",
+    # Toán/THPT style: vai trò GV-HS trong bảng tiến trình
+    "chuyển giao nhiệm vụ", "thực hiện nhiệm vụ",
+    "báo cáo", "kết luận", "nhận định", "thảo luận",
+    "gv:", "hs:", "giáo viên:", "học sinh:",
+    "nhiệm vụ", "quan sát", "hướng dẫn",
 ]
 
 # ── Từ khóa NGHIÊM NGẶT: công cụ/hành động số cụ thể ───────────────────────
@@ -2362,14 +2367,19 @@ def _group_by_buoc(paragraphs: list) -> list[dict]:
 
 
 def _is_to_chuc_table(table) -> bool:
-    """Kiểm tra đây có phải bảng 'Tổ chức thực hiện' (có cột HĐ GV/HS)."""
+    """Kiểm tra đây có phải bảng 'Tổ chức thực hiện' (có cột HĐ GV/HS).
+    Kiểm tra cả 3 hàng đầu vì Toán thường để tên hoạt động ở hàng 1,
+    header cột ở hàng 2."""
     if not table.rows or len(table.rows) < 2:
         return False
-    header = _norm(" ".join(c.text for c in table.rows[0].cells))
-    return any(kw in header for kw in [
-        "gv va hs", "giao vien", "hoc sinh",
-        "hoat dong", "to chuc", "thuc hien",
-    ])
+    kws = ["gv va hs", "giao vien", "hoc sinh", "hoat dong",
+           "to chuc", "thuc hien", "to chuc thuc hien",
+           "nhiem vu", "chuyen giao", "ket luan", "nhan dinh"]
+    for row in table.rows[:3]:
+        header = _norm(" ".join(c.text for c in row.cells))
+        if any(kw in header for kw in kws):
+            return True
+    return False
 
 
 def _find_gv_col(table) -> int:
@@ -2478,21 +2488,25 @@ def _find_gv_hs_col(table) -> int:
 def _match_or_suggest_nls(cell_norm: str, suggestion_map: dict, mon_code: str) -> list:
     """
     Tìm NLS items phù hợp:
-    1. Từ suggestion_map (GV đã duyệt) — ưu tiên tên hoạt động khớp.
-    2. Fallback: tự gợi ý từ _suggest_codes_from_lesson.
+    1. Khớp chính xác tên hoạt động trong suggestion_map.
+    2. Fallback: dùng tất cả items GV đã chọn (không phân biệt hoạt động).
+    3. Auto-suggest từ nội dung ô (dùng _DIGITAL_KW hoặc auto-detect môn).
     """
-    # Thử khớp tên hoạt động
+    # Bước 1: Khớp tên hoạt động cụ thể
     for act_name, items in suggestion_map.items():
         an = _norm(act_name)
         if an[:20] in cell_norm or any(_norm(w) in cell_norm for w in an.split() if len(w) > 3):
             if items:
                 return items[:2]
 
-    # Fallback: auto-suggest
-    if any(_norm(kw) in cell_norm for kw in _DIGITAL_KW):
-        return _suggest_codes_from_lesson(cell_norm, max_codes=2, mon=mon_code)
+    # Bước 2: GV đã chọn mã → dùng làm fallback chung (không cần match activity)
+    if suggestion_map:
+        all_items = [it for lst in suggestion_map.values() for it in lst]
+        if all_items:
+            return all_items[:2]
 
-    return []
+    # Bước 3: Auto-suggest khi không có suggestion_map (chế độ tự động hoàn toàn)
+    return _suggest_codes_from_lesson(cell_norm, max_codes=2, mon=mon_code)
 
 
 def _process_table_recursive(
@@ -2585,16 +2599,19 @@ def _process_paragraphs_for_nls(
     3. Step-block nào có dùng công cụ số → chèn NLS sau đoạn cuối của block đó.
     4. Bỏ qua nếu step-block đã có NLS.
     """
-    # Patterns nhận diện
+    # Patterns nhận diện — mở rộng để bắt mọi kiểu đặt tiêu đề
     TO_CHUC_KW = [
-        "to chuc thuc hien", "b) to chuc", "tổ chức thực hiện",
+        "to chuc thuc hien", "tổ chức thực hiện",
+        "b) to chuc", "c) to chuc", "d) to chuc",
+        "b. to chuc", "c. to chuc", "d. to chuc",
+        "3) to chuc", "4) to chuc", "3. to chuc", "4. to chuc",
     ]
-    STEP_RE  = re.compile(
-        r'^(?:#\d+|bước\s*\d+|b\d+)[:\.\s]',
+    # Mở rộng STEP_RE: bắt "Bước 1:", "- Bước 1:", "#1:", "B1:", "GV:", "HS:"
+    STEP_RE = re.compile(
+        r'^(?:[-•]\s*)?(?:bước|buoc|b\.?\s*|step|task|#)\s*\d+|^(?:gv|hs)\s*:',
         re.IGNORECASE | re.UNICODE,
     )
-    # Major section headings (báo hiệu kết thúc phần Tổ chức thực hiện)
-    END_RE   = re.compile(
+    END_RE = re.compile(
         r'^(?:\d+\s*\.|[IVX]+\s*\.|[a-zà-ỹ]\)\s*(?:mục tiêu|sản phẩm)|'
         r'hoạt động\s+\d+|activity\s+\d+)',
         re.IGNORECASE | re.UNICODE,
@@ -2610,50 +2627,47 @@ def _process_paragraphs_for_nls(
             i += 1
             continue
 
-        # --- Ở trong phần Tổ chức thực hiện: gom step-blocks ---
+        # --- Gom step-blocks trong phần Tổ chức thực hiện ---
         i += 1
-        step_blocks: list[dict] = []   # [{start: int, paras: list}]
+        section_start = i
+        step_blocks: list[dict] = []
         cur_block_start: int | None = None
         cur_block_paras: list = []
+        all_section_paras: list = []   # tất cả para trong section (fallback)
 
         while i < len(paras):
             t = paras[i].text.strip()
-
-            # Kết thúc phần Tổ chức thực hiện
-            if END_RE.match(t) and (cur_block_paras or not t.startswith("#")):
+            if END_RE.match(t) and (cur_block_paras or step_blocks):
                 break
-
-            # Bắt đầu step mới
+            if t:
+                all_section_paras.append(paras[i])
             if STEP_RE.match(t):
                 if cur_block_paras:
-                    step_blocks.append({
-                        "start": cur_block_start,
-                        "paras": cur_block_paras,
-                    })
+                    step_blocks.append({"start": cur_block_start, "paras": cur_block_paras})
                 cur_block_start = i
                 cur_block_paras = [paras[i]]
             elif cur_block_start is not None:
                 cur_block_paras.append(paras[i])
-
             i += 1
 
-        # Lưu step cuối
         if cur_block_paras:
             step_blocks.append({"start": cur_block_start, "paras": cur_block_paras})
+
+        # Fallback: nếu không phát hiện được step nào →
+        # coi toàn bộ phần Tổ chức thực hiện là 1 block
+        if not step_blocks and all_section_paras:
+            step_blocks = [{"start": section_start, "paras": all_section_paras}]
 
         # --- Xử lý từng step-block ---
         for blk in step_blocks:
             blk_text = " ".join(p.text for p in blk["paras"])
             blk_norm = _norm(blk_text)
 
-            # Bỏ qua nếu không có công cụ số
-            if not any(_norm(kw) in blk_norm for kw in _DIGITAL_KW):
-                continue
             # Bỏ qua nếu đã có NLS
             if any("năng lực số" in p.text.lower() for p in blk["paras"]):
                 continue
 
-            # Lấy NLS phù hợp
+            # Lấy NLS phù hợp (không còn yêu cầu _DIGITAL_KW trước khi gọi)
             nls = _match_or_suggest_nls(blk_norm, suggestion_map, mon_code)
             if not nls:
                 continue
