@@ -699,15 +699,94 @@ def format_math_runs(doc):
                 el.set(qn("w:val"), "28")
 
 
+_WPD_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+
+
+def _resize_cell_images(cell, max_emu: int) -> None:
+    """Thu nhỏ ảnh inline (wp:inline) trong ô bảng về không quá max_emu."""
+    for drawing in cell._tc.iter(f"{{{W_NS}}}drawing"):
+        for inline in drawing.iter(f"{{{_WPD_NS}}}inline"):
+            extent = inline.find(f"{{{_WPD_NS}}}extent")
+            if extent is None:
+                continue
+            cx = int(extent.get("cx") or 0)
+            cy = int(extent.get("cy") or 0)
+            if cx > max_emu > 0:
+                ratio = max_emu / cx
+                extent.set("cx", str(int(max_emu)))
+                extent.set("cy", str(int(cy * ratio)))
+
+
+def _fix_floating_images_in_cell(cell, max_emu: int) -> None:
+    """Sửa ảnh floating (wp:anchor) trong ô bảng:
+    1. layoutInCell=1  → ảnh không tràn ra ngoài ô
+    2. wrapTopAndBottom → ảnh không chồng lên chữ
+    3. Thu nhỏ extent nếu quá rộng so với ô
+    """
+    for drawing in cell._tc.iter(f"{{{W_NS}}}drawing"):
+        anchor = drawing.find(f"{{{_WPD_NS}}}anchor")
+        if anchor is None:
+            continue
+
+        # 1. Buộc ảnh nằm trong ô bảng
+        anchor.set("layoutInCell", "1")
+        anchor.set("allowOverlap", "0")
+
+        # 2. Thu nhỏ nếu quá rộng
+        extent = anchor.find(f"{{{_WPD_NS}}}extent")
+        if extent is not None:
+            cx = int(extent.get("cx") or 0)
+            cy = int(extent.get("cy") or 0)
+            if cx > max_emu > 0:
+                ratio = max_emu / cx
+                extent.set("cx", str(int(max_emu)))
+                extent.set("cy", str(int(cy * ratio)))
+
+        # 3. Đổi wrapNone → wrapTopAndBottom (tách ảnh và chữ theo chiều dọc)
+        wrap_none = anchor.find(f"{{{_WPD_NS}}}wrapNone")
+        if wrap_none is not None:
+            idx = list(anchor).index(wrap_none)
+            anchor.remove(wrap_none)
+            wtb = etree.Element(f"{{{_WPD_NS}}}wrapTopAndBottom")
+            anchor.insert(idx, wtb)
+            logger.debug("  anchor wrapNone → wrapTopAndBottom")
+
+
 def resize_inline_images(doc):
+    # ── Ảnh trong body (ngoài bảng) ──────────────────────────────────────────
     for shape in doc.inline_shapes:
         try:
             if shape.width > MAX_CONTENT_EMU:
                 ratio = MAX_CONTENT_EMU / shape.width
-                shape.width = MAX_CONTENT_EMU; shape.height = int(shape.height * ratio)
+                shape.width = MAX_CONTENT_EMU
+                shape.height = int(shape.height * ratio)
             wp = _ancestor_wp(shape._inline)
-            if wp is not None: _center_wp(wp)
-        except Exception as e: logger.warning(f"resize_inline_images: {e}")
+            if wp is not None:
+                _center_wp(wp)
+        except Exception as e:
+            logger.warning(f"resize_inline_images body: {e}")
+
+    # ── Ảnh trong bảng — doc.inline_shapes bỏ qua, phải dùng XML ────────────
+    for table in doc.tables:
+        try:
+            col_count = max(1, len(table.columns))
+        except Exception:
+            col_count = 2
+        seen_tc: set = set()
+        for row in table.rows:
+            for cell in row.cells:
+                tc_id = id(cell._tc)
+                if tc_id in seen_tc:
+                    continue
+                seen_tc.add(tc_id)
+                try:
+                    cw = cell.width          # EMU hoặc None
+                    max_emu = int(cw * 0.90) if (cw and cw > 0) else int(MAX_CONTENT_EMU / col_count)
+                except Exception:
+                    max_emu = int(MAX_CONTENT_EMU / col_count)
+                max_emu = max(max_emu, int(Cm(3)))   # tối thiểu 3 cm
+                _resize_cell_images(cell, max_emu)           # ảnh inline
+                _fix_floating_images_in_cell(cell, max_emu)  # ảnh floating
 
 
 def format_header_footer(doc):
