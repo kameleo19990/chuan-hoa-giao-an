@@ -3473,37 +3473,43 @@ def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str) -> Document:
 
 @app.post("/generate-5512-docx")
 async def generate_5512_docx_endpoint(
-    file: UploadFile = File(...),
-    mon:  str = Form(""),
-    cap:  str = Form(""),
+    file:          UploadFile = File(...),
+    mon:           str = Form(""),
+    cap:           str = Form(""),
+    analysis_json: str = Form(""),    # JSON đã phân tích từ bước trước → không gọi AI lại
     user: dict = Depends(get_current_user),
 ):
     """
-    Phân tích giáo án thô → tạo file .docx chuẩn 5512 + NLS tích hợp.
-    Trả về file .docx sẵn sàng sử dụng.
+    Tạo file .docx chuẩn 5512 + NLS.
+    Nếu có analysis_json → dùng luôn, không gọi AI.
+    Nếu không → mới gọi AI (tốn quota).
     """
-    check_and_increment_quota(user["sub"])
-
-    if not file.filename.lower().endswith(".docx"):
-        raise HTTPException(400, "Chỉ hỗ trợ .docx")
+    import json as _json
 
     tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
     tmp_in.write(await file.read()); tmp_in.close()
     tmp_out = tmp_in.name.replace(".docx", "_5512.docx")
 
     try:
-        doc      = _open_docx_safe(tmp_in.name)
-        doc_text = extract_doc_text(doc)
-        if not doc_text.strip():
-            raise HTTPException(422, "Không đọc được nội dung file.")
-
-        # Phân tích với AI
-        if GROQ_API_KEY:
-            analysis = await _call_groq_5512(doc_text, mon, cap)
-        elif GEMINI_API_KEY:
-            analysis = await _call_gemini_5512(doc_text, mon, cap)
+        # Dùng JSON đã có → không gọi AI lại (tránh rate limit)
+        if analysis_json.strip():
+            try:
+                analysis = _json.loads(analysis_json)
+            except Exception:
+                raise HTTPException(400, "analysis_json không hợp lệ.")
         else:
-            raise HTTPException(503, "Chưa cấu hình AI API (GROQ_API_KEY).")
+            # Không có JSON → gọi AI (tốn quota)
+            check_and_increment_quota(user["sub"])
+            doc      = _open_docx_safe(tmp_in.name)
+            doc_text = extract_doc_text(doc)
+            if not doc_text.strip():
+                raise HTTPException(422, "Không đọc được nội dung file.")
+            if GROQ_API_KEY:
+                analysis = await _call_groq_5512(doc_text, mon, cap)
+            elif GEMINI_API_KEY:
+                analysis = await _call_gemini_5512(doc_text, mon, cap)
+            else:
+                raise HTTPException(503, "Chưa cấu hình AI API.")
 
         # Tạo file Word chuẩn 5512
         mon_name = MON_LABELS.get(mon, mon) or "môn học"

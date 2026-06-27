@@ -1500,7 +1500,13 @@ async function generate5512Docx() {
   hide('btn5512-docx'); show('load5512-docx');
   try {
     const fd = new FormData();
-    fd.append('file', file5512); fd.append('mon', mon); fd.append('cap', cap);
+    fd.append('file', file5512);
+    fd.append('mon', mon);
+    fd.append('cap', cap);
+    // Gửi JSON đã phân tích → backend không cần gọi AI lại → tránh rate limit
+    if (result5512Data) {
+      fd.append('analysis_json', JSON.stringify(result5512Data));
+    }
     const r = await handleApiResponse(
       await authFetch('/generate-5512-docx', { method: 'POST', body: fd })
     );
