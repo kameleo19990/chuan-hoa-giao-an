@@ -3777,10 +3777,11 @@ async def generate_5512_docx_endpoint(
         out_name = f"{stem}_5512_chuanhoa.docx"
 
         from fastapi.responses import Response as _Resp
+        from urllib.parse import quote as _quote
         return _Resp(
             content=file_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{out_name}"},
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{_quote(out_name)}"},
         )
 
     except HTTPException:
