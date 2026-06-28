@@ -3084,53 +3084,66 @@ def _build_nls_reference(mon: str = "") -> str:
 
 
 def _build_5512_prompt(doc_text: str, mon: str, cap: str) -> str:
-    """Xây prompt phân tích giáo án → JSON chuẩn 5512 + NLS. Tối ưu token."""
-    mon_name  = MON_LABELS.get(mon, mon) or "môn học"
-    cap_name  = CAP_LABELS.get(cap, cap) or ""
-    nls_ref   = _build_nls_reference(mon)   # Lọc theo môn → ít token hơn
+    """Xây prompt phân tích giáo án → JSON chuẩn Phụ lục IV Công văn 5512 + NLS."""
+    mon_name = MON_LABELS.get(mon, mon) or "môn học"
+    cap_name = CAP_LABELS.get(cap, cap) or ""
+    nls_ref  = _build_nls_reference(mon)
 
-    # Giới hạn độ dài tài liệu để tránh vượt token limit
-    doc_snippet = doc_text[:7000] if len(doc_text) > 7000 else doc_text
+    # Tăng lên 12000 ký tự để bắt đủ nội dung bài dài
+    doc_snippet = doc_text[:12000] if len(doc_text) > 12000 else doc_text
 
-    return f"""Bạn là chuyên gia giáo dục phổ thông Việt Nam, thành thạo Công văn 5512/BGDĐT.
+    return f"""Bạn là chuyên gia giáo dục phổ thông Việt Nam, thành thạo Công văn 5512/BGDĐT-GDTH.
 
-NHIỆM VỤ: Phân tích giáo án {mon_name}{' – ' + cap_name if cap_name else ''} dưới đây và trả về JSON chuẩn.
+NHIỆM VỤ: Phân tích giáo án {mon_name}{' – ' + cap_name if cap_name else ''} và trả về JSON theo đúng cấu trúc Phụ lục IV.
 
 ═══ QUY TRÌNH ═══
-1. Xác định tên bài học.
-2. Phân loại toàn bộ hoạt động dạy học vào đúng 4 bước theo Công văn 5512:
-   - buoc_1: Xác định vấn đề / Nhiệm vụ học tập  (Khởi động, Mở đầu, Tạo tình huống)
-   - buoc_2: Nghiên cứu kiến thức mới / Thực hiện nhiệm vụ  (Hình thành kiến thức)
+1. Xác định tên bài học, thiết bị/học liệu, mục tiêu kiến thức và phẩm chất từ giáo án gốc.
+2. Phân loại hoạt động dạy học vào đúng 4 Hoạt động theo Công văn 5512:
+   - buoc_1: Xác định vấn đề / Nhiệm vụ học tập / Mở đầu  (Khởi động, Tình huống)
+   - buoc_2: Hình thành kiến thức mới / Thực hiện nhiệm vụ
    - buoc_3: Luyện tập  (Thực hành, Củng cố)
-   - buoc_4: Vận dụng  (Ứng dụng, Sáng tạo, Mở rộng)
-3. Giữ NGUYÊN VẸN nội dung chuyên môn gốc — KHÔNG xóa, KHÔNG viết lại.
-4. Với mỗi bước, xác định xem có hoạt động nào sử dụng CÔNG CỤ SỐ không
-   (phần mềm, ứng dụng, internet, video, thiết bị số...).
-5. Nếu có → chọn tối đa 2–3 mã NLS PHÙ HỢP NHẤT từ BẢNG MÃ bên dưới.
-   TUYỆT ĐỐI không bịa mã ngoài danh sách. Nếu không có hoạt động số → nls = [].
+   - buoc_4: Vận dụng  (Ứng dụng, Mở rộng)
+3. Với MỖI hoạt động, điền đủ 4 mục a/b/c/d theo Phụ lục IV:
+   a) muc_tieu: Mục tiêu cụ thể của hoạt động đó (HS sẽ làm được gì)
+   b) noi_dung: Nội dung yêu cầu/nhiệm vụ HS phải thực hiện — giữ nguyên từ bản gốc
+   c) san_pham: Sản phẩm/kết quả HS cần hoàn thành
+   d) to_chuc: Cách GV và HS tiến hành (giao nhiệm vụ → thực hiện → báo cáo → kết luận)
+4. Nếu hoạt động có sử dụng CÔNG CỤ SỐ (phần mềm, internet, video, thiết bị số...):
+   → chọn tối đa 2 mã NLS phù hợp nhất từ BẢNG MÃ. TUYỆT ĐỐI không bịa mã.
+   → Nếu không có công cụ số → nls = [].
 
-═══ BẢNG MÃ NLS (chỉ được dùng các mã này) ═══
+═══ BẢNG MÃ NLS ═══
 {nls_ref}
 
-═══ ĐỊNH DẠNG JSON TRẢ VỀ (JSON thuần, không markdown) ═══
+═══ JSON TRẢ VỀ (JSON thuần, không markdown, không giải thích) ═══
 {{
   "mon": "{mon_name}",
   "cap": "{cap_name}",
-  "ten_bai": "...",
+  "ten_bai": "Tên bài học từ giáo án gốc",
+  "thiet_bi": "Liệt kê thiết bị và học liệu từ giáo án gốc",
+  "muc_tieu_kien_thuc": "Nội dung mục tiêu kiến thức từ giáo án gốc",
+  "muc_tieu_nang_luc": "Nội dung mục tiêu năng lực từ giáo án gốc",
+  "muc_tieu_pham_chat": "Nội dung mục tiêu phẩm chất từ giáo án gốc",
   "buoc_1": {{
-    "ten_buoc": "Xác định vấn đề / Nhiệm vụ học tập",
-    "noi_dung": "...(giữ nguyên nội dung gốc, có thể gộp nhiều hoạt động)...",
-    "nls": [
-      {{
-        "ma": "1.1TC1a",
-        "mo_ta": "Giải thích được nhu cầu thông tin",
-        "cong_cu": "Tên công cụ số phù hợp với hoạt động cụ thể"
-      }}
-    ]
+    "ten_hoat_dong": "Xác định vấn đề / Mở đầu: [tên cụ thể ghi rõ kết quả hoạt động]",
+    "muc_tieu": "Mục tiêu của Hoạt động 1",
+    "noi_dung": "Nội dung yêu cầu/nhiệm vụ (giữ nguyên từ gốc)",
+    "san_pham": "Sản phẩm HS cần hoàn thành",
+    "to_chuc": "Cách tổ chức: GV giao nhiệm vụ... HS thực hiện... GV theo dõi... HS báo cáo... GV kết luận...",
+    "nls": [{{"ma": "1.1TC1a", "mo_ta": "Mô tả ngắn", "cong_cu": "Công cụ số cụ thể"}}]
   }},
-  "buoc_2": {{ "ten_buoc": "...", "noi_dung": "...", "nls": [] }},
-  "buoc_3": {{ "ten_buoc": "...", "noi_dung": "...", "nls": [] }},
-  "buoc_4": {{ "ten_buoc": "...", "noi_dung": "...", "nls": [] }}
+  "buoc_2": {{
+    "ten_hoat_dong": "Hình thành kiến thức mới: [tên cụ thể]",
+    "muc_tieu": "...", "noi_dung": "...", "san_pham": "...", "to_chuc": "...", "nls": []
+  }},
+  "buoc_3": {{
+    "ten_hoat_dong": "Luyện tập: [tên cụ thể]",
+    "muc_tieu": "...", "noi_dung": "...", "san_pham": "...", "to_chuc": "...", "nls": []
+  }},
+  "buoc_4": {{
+    "ten_hoat_dong": "Vận dụng: [tên cụ thể]",
+    "muc_tieu": "...", "noi_dung": "...", "san_pham": "...", "to_chuc": "...", "nls": []
+  }}
 }}
 
 ═══ GIÁO ÁN GỐC ═══
@@ -3392,126 +3405,317 @@ async def convert_5512_endpoint(
         _cleanup(tmp.name)
 
 
-def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str) -> Document:
+# ── Helpers: copy ảnh/OMML từ file gốc sang file 5512 mới ───────────────────
+_A_NS_BLIP = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_REL_EMBED = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_IMG_REL   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+
+
+def _para_has_media(para_elem) -> bool:
+    """Kiểm tra <w:p> có chứa ảnh (wp:drawing) hoặc công thức OMML không."""
+    return (
+        para_elem.find(f".//{{{W_NS}}}drawing")   is not None or
+        para_elem.find(f".//{{{MATH_NS}}}oMath")  is not None
+    )
+
+
+def _copy_para_with_media(para_elem, src_doc, tgt_doc):
     """
-    Tạo file .docx chuẩn Công văn 5512 từ kết quả phân tích JSON.
-    Cấu trúc: Tiêu đề → I.Mục tiêu (+ NLS tổng hợp) → III.Tiến trình (4 bước + NLS inline).
+    Deep-copy <w:p> element sang doc mới.
+    Remap rId của ảnh (blip) từ src sang tgt để ảnh hiển thị đúng.
+    Công thức OMML không cần remap — copy trực tiếp.
     """
+    import copy as _cp
+    new_p = _cp.deepcopy(para_elem)
+    for blip in new_p.iter(f"{{{_A_NS_BLIP}}}blip"):
+        old_rId = blip.get(f"{{{_REL_EMBED}}}embed")
+        if not old_rId:
+            continue
+        try:
+            img_part = src_doc.part.related_parts.get(old_rId)
+            if img_part:
+                new_rId = tgt_doc.part.relate_to(img_part, _IMG_REL)
+                blip.set(f"{{{_REL_EMBED}}}embed", new_rId)
+        except Exception as e:
+            logger.warning(f"copy_para_media rId={old_rId}: {e}")
+    return new_p
+
+
+def _collect_media_paras(orig_doc) -> dict:
+    """
+    Quét toàn bộ file gốc (body + table cells), nhóm các <w:p> có ảnh/OMML
+    theo hoạt động tương ứng trong 5512.
+    Returns: {"buoc_1": [elem, ...], "buoc_2": [...], "buoc_3": [...], "buoc_4": [...]}
+    """
+    SECTION_KW = {
+        "buoc_1": ["khởi động", "mở đầu", "hoat dong 1", "xac dinh van de", "tao tinh huong"],
+        "buoc_2": ["hinh thanh kien thuc", "hoat dong 2", "nghien cuu", "kien thuc moi", "thuc hien nhiem vu"],
+        "buoc_3": ["luyen tap", "thuc hanh", "hoat dong 3", "cung co", "ren luyen"],
+        "buoc_4": ["van dung", "ung dung", "hoat dong 4", "mo rong", "sang tao"],
+    }
+    result  = {sk: [] for sk in SECTION_KW}
+    current = None
+
+    def _update_section(text: str):
+        nonlocal current
+        tn = _norm(text)
+        for sk, kws in SECTION_KW.items():
+            if any(kw in tn for kw in kws):
+                current = sk
+                return
+
+    def _scan(elem):
+        if elem.tag == f"{{{W_NS}}}p":
+            raw = "".join(t.text or "" for t in elem.iter(f"{{{W_NS}}}t"))
+            _update_section(raw)
+            if current and _para_has_media(elem):
+                result[current].append(elem)
+        elif elem.tag == f"{{{W_NS}}}tbl":
+            for tc in elem.iter(f"{{{W_NS}}}tc"):
+                for child in list(tc):
+                    _scan(child)
+
+    for child in orig_doc.element.body:
+        _scan(child)
+
+    logger.info("_collect_media_paras: " +
+                ", ".join(f"{k}={len(v)}" for k, v in result.items()))
+    return result
+
+
+def _append_elem_to_doc(doc, elem) -> None:
+    """Chèn lxml element vào body doc, ngay trước <w:sectPr>."""
+    body   = doc.element.body
+    sect   = body.find(qn("w:sectPr"))
+    if sect is not None:
+        sect.addprevious(elem)
+    else:
+        body.append(elem)
+
+
+def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str,
+                    orig_doc=None) -> Document:
+    """
+    Tạo .docx theo đúng Phụ lục IV Công văn 5512/BGDĐT-GDTH.
+    Cấu trúc: Header → I.Mục tiêu → II.Thiết bị → III.Tiến trình (4 HĐ × a/b/c/d + NLS).
+    orig_doc: Document gốc (tùy chọn) → copy ảnh và OMML vào từng bước tương ứng.
+    """
+    # Thu thập đoạn có media từ file gốc nếu có
+    media_map: dict = _collect_media_paras(orig_doc) if orig_doc else {}
     doc = Document()
-
-    # ── Margin A4 ─────────────────────────────────────────────────────────────
     for sec in doc.sections:
-        sec.top_margin    = Cm(2.0); sec.bottom_margin = Cm(2.0)
-        sec.left_margin   = Cm(3.0); sec.right_margin  = Cm(2.0)
-        sec.page_height   = Cm(29.7); sec.page_width   = Cm(21.0)
+        sec.top_margin = Cm(2.0); sec.bottom_margin = Cm(2.0)
+        sec.left_margin = Cm(3.0); sec.right_margin = Cm(2.0)
+        sec.page_height = Cm(29.7); sec.page_width  = Cm(21.0)
 
-    def _run(para, text, bold=False, italic=False, size_pt=14):
-        r = para.add_run(text)
-        r.bold = bold; r.italic = italic
-        r.font.name = "Times New Roman"; r.font.size = Pt(size_pt)
-        return r
-
-    def _para(style="Normal", space_before=3, space_after=3):
-        p = doc.add_paragraph(style=style)
-        p.paragraph_format.space_before = Pt(space_before)
-        p.paragraph_format.space_after  = Pt(space_after)
-        p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def _p(indent_cm=0, align=None, before=3, after=3):
+        p = doc.add_paragraph()
+        pf = p.paragraph_format
+        pf.space_before = Pt(before); pf.space_after = Pt(after)
+        pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        if indent_cm:
+            pf.left_indent = Cm(indent_cm)
+        if align is not None:
+            p.alignment = align
         return p
 
-    def _heading(text, level=1):
-        h = doc.add_heading(text, level=level)
-        for run in h.runs:
-            run.font.name = "Times New Roman"; run.font.size = Pt(14 - level + 1)
-        h.paragraph_format.space_before = Pt(6)
-        h.paragraph_format.space_after  = Pt(3)
-        return h
+    def _r(para, text, bold=False, italic=False, pt=14):
+        r = para.add_run(text)
+        r.bold = bold; r.italic = italic
+        r.font.name = "Times New Roman"; r.font.size = Pt(pt)
+        return r
+
+    def _lines(para, text, pt=14, indent_cm=0):
+        """Thêm nhiều dòng văn bản vào đoạn văn riêng biệt."""
+        first = True
+        for line in (text or "").split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if first:
+                _r(para, line, pt=pt); first = False
+            else:
+                p2 = _p(indent_cm=indent_cm)
+                _r(p2, line, pt=pt)
 
     ten_bai  = analysis.get("ten_bai", "Giáo án")
-    mon_cap  = f"{mon_name}{' – ' + cap_name if cap_name else ''}"
 
-    # ── Tiêu đề ───────────────────────────────────────────────────────────────
-    t = _para(); t.alignment = 1   # center
-    _run(t, ten_bai, bold=True, size_pt=16)
-    t2 = _para(); t2.alignment = 1
-    _run(t2, f"Môn: {mon_cap}", bold=True, size_pt=14)
+    # ── HEADER — Phụ lục IV ───────────────────────────────────────────────────
+    ph = _p(align=1, before=0, after=0)
+    _r(ph, "Phụ lục IV", bold=True, pt=13)
+
+    sub = _p(align=1, before=0, after=6)
+    _r(sub, "KHUNG KẾ HOẠCH BÀI DẠY", bold=True, pt=14)
+
+    cv = _p(align=1, before=0, after=6)
+    _r(cv, "(Kèm theo Công văn số 5512/BGDĐT-GDTH ngày 18 tháng 12 năm 2020 của Bộ GDĐT)",
+       italic=True, pt=12)
+
+    # Bảng thông tin GV (2 cột: Trường/Tổ | Họ và tên)
+    tbl_hdr = doc.add_table(rows=2, cols=2)
+    tbl_hdr.style = "Table Grid"
+    tbl_hdr.autofit = True
+    def _th(r, c, txt, bold=False):
+        cell = tbl_hdr.cell(r, c)
+        run  = cell.paragraphs[0].add_run(txt)
+        run.font.name = "Times New Roman"; run.font.size = Pt(13)
+        run.bold = bold
+    _th(0, 0, "Trường: .................................")
+    _th(0, 1, "Họ và tên giáo viên: .................................")
+    _th(1, 0, "Tổ: .................................")
+    _th(1, 1, "")
+
+    doc.add_paragraph()   # khoảng cách
+
+    # Tên bài, môn, thời gian
+    tb_p = _p(align=1, before=6, after=2)
+    _r(tb_p, f"TÊN BÀI DẠY: {ten_bai}", bold=True, pt=14)
+
+    mn_p = _p(align=1, before=2, after=2)
+    _r(mn_p, f"Môn học/Hoạt động giáo dục: {mon_name}; lớp: {cap_name}", pt=13)
+
+    tg_p = _p(align=1, before=2, after=6)
+    _r(tg_p, "Thời gian thực hiện: .......... (số tiết)", pt=13)
 
     # ── I. Mục tiêu ───────────────────────────────────────────────────────────
-    _heading("I. Mục tiêu", level=1)
-    _heading("1. Về kiến thức", level=2)
-    kt = _para(); _run(kt, "(Giáo viên bổ sung mục tiêu kiến thức cụ thể)", italic=True)
+    mt_h = _p(before=6, after=3)
+    _r(mt_h, "I. Mục tiêu", bold=True, pt=14)
 
-    _heading("2. Về năng lực", level=2)
-    nl = _para(); _run(nl, "- Các năng lực chung và năng lực đặc thù môn học.")
+    def _muc(num, title, content, fallback="(Giáo viên bổ sung)"):
+        h = _p(indent_cm=0.5, before=3, after=2)
+        _r(h, f"{num}. Về {title}: ", bold=True, pt=14)
+        if content:
+            _r(h, content, pt=14)
+        else:
+            _r(h, fallback, italic=True, pt=14)
 
-    # Thu thập tất cả NLS từ 4 bước để đưa vào Mục tiêu
+    _muc("1", "kiến thức", analysis.get("muc_tieu_kien_thuc", ""))
+    _muc("2", "năng lực",  analysis.get("muc_tieu_nang_luc", ""))
+
+    # NLS tổng hợp — chèn vào cuối mục 2
     all_nls: list[dict] = []
-    for step_key in ("buoc_1","buoc_2","buoc_3","buoc_4"):
-        all_nls.extend(analysis.get(step_key, {}).get("nls", []))
+    seen_nls: set = set()
+    for sk in ("buoc_1", "buoc_2", "buoc_3", "buoc_4"):
+        for item in analysis.get(sk, {}).get("nls", []):
+            code = item.get("ma", "")
+            if code and code not in seen_nls:
+                seen_nls.add(code); all_nls.append(item)
 
     if all_nls:
-        p_nls_title = _para()
-        _run(p_nls_title, f"Năng lực số tích hợp – {mon_name} (NLS):", bold=True, italic=True)
-        seen_codes: set = set()
+        nls_h = _p(indent_cm=0.5, before=2, after=1)
+        _r(nls_h, f"- Năng lực số tích hợp – {mon_name} (NLS):", bold=True, italic=True, pt=13)
         for item in all_nls:
-            code = item.get("ma","")
-            if code in seen_codes:
-                continue
-            seen_codes.add(code)
-            pn = _para()
-            _run(pn, f"- {code}: {item.get('mo_ta','')}")
+            pn = _p(indent_cm=1.0, before=1, after=1)
+            _r(pn, f"+ {item.get('ma','')}: {item.get('mo_ta','')}", pt=13)
             if item.get("cong_cu"):
-                _run(pn, f"  ▶ Công cụ: {item['cong_cu']}", italic=True)
+                _r(pn, f"  ▶ Công cụ: {item['cong_cu']}", italic=True, pt=13)
 
-    _heading("3. Về phẩm chất", level=2)
-    pq = _para(); _run(pq, "(Giáo viên bổ sung mục tiêu phẩm chất cụ thể)", italic=True)
+    _muc("3", "phẩm chất", analysis.get("muc_tieu_pham_chat", ""))
 
     # ── II. Thiết bị ──────────────────────────────────────────────────────────
-    _heading("II. Thiết bị dạy học và học liệu", level=1)
-    tb = _para(); _run(tb, "- SGK, sách bài tập, máy chiếu.")
-    # Thêm công cụ số từ NLS
-    all_tools: list[str] = []
-    for item in all_nls:
-        ct = (item.get("cong_cu") or "").strip()
-        if ct and ct not in all_tools:
-            all_tools.append(ct)
+    tb_h = _p(before=6, after=3)
+    _r(tb_h, "II. Thiết bị dạy học và học liệu", bold=True, pt=14)
+
+    thiet_bi = (analysis.get("thiet_bi") or "SGK, sách bài tập, máy chiếu.").strip()
+    tb_p2 = _p(indent_cm=0.5, before=2, after=2)
+    _lines(tb_p2, thiet_bi, pt=14, indent_cm=0.5)
+
+    # Thêm công cụ số từ NLS nếu có
+    all_tools = list(dict.fromkeys(
+        (i.get("cong_cu") or "").strip() for i in all_nls if i.get("cong_cu")
+    ))
     if all_tools:
-        tbt = _para(); _run(tbt, "- Công cụ số: " + "; ".join(all_tools[:5]) + ".")
+        ct_p = _p(indent_cm=0.5, before=1, after=2)
+        _r(ct_p, f"- Công cụ số: {'; '.join(all_tools[:5])}.", pt=14)
 
-    # ── III. Tiến trình ───────────────────────────────────────────────────────
-    _heading("III. Tiến trình dạy học", level=1)
+    # ── III. Tiến trình dạy học ───────────────────────────────────────────────
+    tt_h = _p(before=6, after=3)
+    _r(tt_h, "III. Tiến trình dạy học", bold=True, pt=14)
 
-    STEP_META = {
-        "buoc_1": ("1.", "Xác định vấn đề / Nhiệm vụ học tập"),
-        "buoc_2": ("2.", "Nghiên cứu kiến thức mới / Thực hiện nhiệm vụ"),
-        "buoc_3": ("3.", "Luyện tập"),
-        "buoc_4": ("4.", "Vận dụng"),
+    STEP_NUMS = {
+        "buoc_1": "1", "buoc_2": "2", "buoc_3": "3", "buoc_4": "4"
+    }
+    DEFAULT_NAMES = {
+        "buoc_1": "Xác định vấn đề / Nhiệm vụ học tập / Mở đầu",
+        "buoc_2": "Hình thành kiến thức mới / Thực hiện nhiệm vụ",
+        "buoc_3": "Luyện tập",
+        "buoc_4": "Vận dụng",
     }
 
-    for step_key, (num, step_title) in STEP_META.items():
-        step = analysis.get(step_key, {})
-        noi_dung = (step.get("noi_dung") or "").strip()
-        nls_items = step.get("nls", [])
+    for sk, num in STEP_NUMS.items():
+        step = analysis.get(sk, {})
+        ten_hd   = (step.get("ten_hoat_dong") or DEFAULT_NAMES[sk]).strip()
+        muc_tieu = (step.get("muc_tieu") or "").strip()
+        noi_dung = (step.get("noi_dung")  or "").strip()
+        san_pham = (step.get("san_pham")  or "").strip()
+        to_chuc  = (step.get("to_chuc")   or "").strip()
+        nls_list = step.get("nls", [])
 
-        _heading(f"{num} {step_title}", level=2)
+        # Tiêu đề hoạt động
+        hd_h = _p(before=6, after=2)
+        _r(hd_h, f"{num}. Hoạt động {num}: {ten_hd}", bold=True, pt=14)
 
-        # Nội dung hoạt động
-        if noi_dung:
-            for line in noi_dung.split("\n"):
-                line = line.strip()
-                if line:
-                    p = _para(); _run(p, line)
+        # a) Mục tiêu
+        def _sub(letter, title, content, fallback="(Giáo viên bổ sung)"):
+            p = _p(indent_cm=0.5, before=2, after=1)
+            _r(p, f"{letter}) {title}: ", bold=True, pt=14)
+            if content:
+                _r(p, content, pt=14)
+            else:
+                _r(p, fallback, italic=True, pt=14)
+
+        _sub("a", "Mục tiêu",              muc_tieu,
+             "Nêu mục tiêu giúp học sinh xác định được vấn đề/nhiệm vụ học tập.")
+        _sub("b", "Nội dung",              noi_dung,
+             "(Giáo viên mô tả nội dung yêu cầu học sinh thực hiện)")
+        _sub("c", "Sản phẩm dự kiến",      san_pham,
+             "(Mô tả kết quả học sinh cần hoàn thành)")
+
+        # d) Tổ chức thực hiện + NLS
+        p_d = _p(indent_cm=0.5, before=2, after=1)
+        _r(p_d, "d) Tổ chức thực hiện: ", bold=True, pt=14)
+        if to_chuc:
+            _r(p_d, to_chuc, pt=14)
         else:
-            p = _para(); _run(p, "(Chưa có nội dung — giáo viên bổ sung)", italic=True)
+            _r(p_d, "(Giáo viên mô tả các bước tổ chức hoạt động)", italic=True, pt=14)
 
-        # NLS tích hợp vào bước
-        if nls_items:
-            nls_h = _para()
-            _run(nls_h, f"Năng lực số tích hợp – {mon_name} (NLS):", bold=True, italic=True)
-            for item in nls_items:
-                pn = _para()
-                _run(pn, f"  {item.get('ma','')}: {item.get('mo_ta','')}")
+        # NLS inline — chèn sau d) Tổ chức
+        if nls_list:
+            pn_h = _p(indent_cm=0.5, before=2, after=1)
+            _r(pn_h, f"Năng lực số tích hợp – {mon_name} (NLS):", bold=True, italic=True, pt=13)
+            for item in nls_list:
+                pn = _p(indent_cm=1.0, before=1, after=1)
+                _r(pn, f"+ {item.get('ma','')}: {item.get('mo_ta','')}", pt=13)
                 if item.get("cong_cu"):
-                    _run(pn, f"\n  ▶ Công cụ thực hiện: {item['cong_cu']}", italic=True)
+                    _r(pn, f"  ▶ Công cụ thực hiện: {item['cong_cu']}", italic=True, pt=13)
+
+        # ── Chèn ảnh / OMML từ file gốc tương ứng với bước này ──────────────
+        media_elems = media_map.get(sk, [])
+        if media_elems:
+            lbl = _p(indent_cm=0.5, before=3, after=1)
+            _r(lbl, "Hình ảnh / Công thức từ giáo án gốc:", italic=True, pt=12)
+            for pe in media_elems:
+                try:
+                    new_pe = _copy_para_with_media(pe, orig_doc, doc)
+                    _append_elem_to_doc(doc, new_pe)
+                except Exception as e:
+                    logger.warning(f"copy media buoc={sk}: {e}")
+
+    # ── IV. Điều chỉnh sau bài dạy ───────────────────────────────────────────
+    dc_h = _p(before=8, after=3)
+    _r(dc_h, "IV. Điều chỉnh sau bài dạy", bold=True, pt=14)
+
+    dc_note = _p(indent_cm=0.5, before=2, after=2)
+    _r(dc_note,
+       "(Giáo viên ghi nhận xét, đánh giá sau khi dạy và điều chỉnh cho phù hợp "
+       "với từng lớp học, điều kiện thực tế.)", italic=True, pt=13)
+
+    # 3 dòng gạch dưới để GV điền tay
+    for _ in range(3):
+        dl = _p(indent_cm=0.5, before=2, after=2)
+        _r(dl, "................................................................"
+               "................................................................", pt=13)
 
     return doc
 
@@ -3536,6 +3740,9 @@ async def generate_5512_docx_endpoint(
     tmp_out = tmp_in.name.replace(".docx", "_5512.docx")
 
     try:
+        # Luôn mở file gốc để copy ảnh/OMML
+        orig_doc = _open_docx_safe(tmp_in.name)
+
         # Dùng JSON đã có → không gọi AI lại (tránh rate limit)
         if analysis_json.strip():
             try:
@@ -3545,8 +3752,7 @@ async def generate_5512_docx_endpoint(
         else:
             # Không có JSON → gọi AI (tốn quota)
             check_and_increment_quota(user["sub"])
-            doc      = _open_docx_safe(tmp_in.name)
-            doc_text = extract_doc_text(doc)
+            doc_text = extract_doc_text(orig_doc)
             if not doc_text.strip():
                 raise HTTPException(422, "Không đọc được nội dung file.")
             if GROQ_API_KEY:
@@ -3556,10 +3762,10 @@ async def generate_5512_docx_endpoint(
             else:
                 raise HTTPException(503, "Chưa cấu hình AI API.")
 
-        # Tạo file Word chuẩn 5512
+        # Tạo file Word chuẩn 5512 — truyền orig_doc để copy ảnh/OMML
         mon_name = MON_LABELS.get(mon, mon) or "môn học"
         cap_name = CAP_LABELS.get(cap, cap) or ""
-        new_doc  = _make_5512_docx(analysis, mon_name, cap_name)
+        new_doc  = _make_5512_docx(analysis, mon_name, cap_name, orig_doc=orig_doc)
         new_doc.save(tmp_out)
 
         # Đọc vào bộ nhớ rồi xóa file tạm ngay — tránh race condition với FileResponse
