@@ -3441,45 +3441,73 @@ def _copy_para_with_media(para_elem, src_doc, tgt_doc):
     return new_p
 
 
-def _collect_media_paras(orig_doc) -> dict:
+def _collect_section_content(orig_doc) -> dict:
     """
-    Quét toàn bộ file gốc (body + table cells), nhóm các <w:p> có ảnh/OMML
-    theo hoạt động tương ứng trong 5512.
+    Quét toàn bộ file gốc (body + table cells), nhóm TẤT CẢ nội dung
+    (text GV/HS, ảnh, công thức OMML) theo 4 hoạt động 5512.
+
+    Logic:
+    - Khi gặp tiêu đề hoạt động (Hoạt động 1/Bước 1/Khởi động...) → đánh dấu section mới
+    - Các đoạn văn TIẾP THEO (text + ảnh + OMML) → gom vào section đó
+    - Không thu thập chính tiêu đề section
+
     Returns: {"buoc_1": [elem, ...], "buoc_2": [...], "buoc_3": [...], "buoc_4": [...]}
     """
     SECTION_KW = {
-        "buoc_1": ["khởi động", "mở đầu", "hoat dong 1", "xac dinh van de", "tao tinh huong"],
-        "buoc_2": ["hinh thanh kien thuc", "hoat dong 2", "nghien cuu", "kien thuc moi", "thuc hien nhiem vu"],
+        "buoc_1": ["khởi động", "mở đầu", "hoat dong 1", "xac dinh van de",
+                   "tao tinh huong", "nhiem vu hoc tap"],
+        "buoc_2": ["hinh thanh kien thuc", "hoat dong 2", "nghien cuu",
+                   "kien thuc moi", "thuc hien nhiem vu", "giai quyet van de"],
         "buoc_3": ["luyen tap", "thuc hanh", "hoat dong 3", "cung co", "ren luyen"],
         "buoc_4": ["van dung", "ung dung", "hoat dong 4", "mo rong", "sang tao"],
     }
+    # Từ khóa báo hiệu KẾT THÚC phần Tiến trình (để ngừng scan)
+    END_KW = ["dieu chinh", "ghi chu", "ruton", "ket thuc bai"]
+
     result  = {sk: [] for sk in SECTION_KW}
     current = None
 
-    def _update_section(text: str):
-        nonlocal current
-        tn = _norm(text)
+    def _is_section_header(tn: str) -> str | None:
+        """Trả về section key nếu text là tiêu đề hoạt động, else None."""
         for sk, kws in SECTION_KW.items():
             if any(kw in tn for kw in kws):
-                current = sk
-                return
+                return sk
+        return None
+
+    def _is_end(tn: str) -> bool:
+        return any(kw in tn for kw in END_KW)
 
     def _scan(elem):
+        nonlocal current
         if elem.tag == f"{{{W_NS}}}p":
             raw = "".join(t.text or "" for t in elem.iter(f"{{{W_NS}}}t"))
-            _update_section(raw)
-            if current and _para_has_media(elem):
+            tn  = _norm(raw)
+
+            if _is_end(tn):
+                current = None
+                return
+
+            new_sec = _is_section_header(tn)
+            if new_sec:
+                current = new_sec
+                return   # Bỏ qua dòng tiêu đề, chỉ gom nội dung phía sau
+
+            # Thu thập nếu: đang trong 1 section VÀ đoạn có nội dung thực sự
+            if current and (raw.strip() or _para_has_media(elem)):
                 result[current].append(elem)
+
         elif elem.tag == f"{{{W_NS}}}tbl":
-            for tc in elem.iter(f"{{{W_NS}}}tc"):
-                for child in list(tc):
-                    _scan(child)
+            # Với bảng: quét từng ô, bỏ qua hàng tiêu đề (row 0) nếu cần
+            for row_idx, tr in enumerate(elem.iter(f"{{{W_NS}}}tr")):
+                for tc in tr.iter(f"{{{W_NS}}}tc"):
+                    for child in list(tc):
+                        _scan(child)
 
     for child in orig_doc.element.body:
         _scan(child)
 
-    logger.info("_collect_media_paras: " +
-                ", ".join(f"{k}={len(v)}" for k, v in result.items()))
+    counts = {k: len(v) for k, v in result.items()}
+    logger.info(f"_collect_section_content: {counts}")
     return result
 
 
@@ -3500,8 +3528,8 @@ def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str,
     Cấu trúc: Header → I.Mục tiêu → II.Thiết bị → III.Tiến trình (4 HĐ × a/b/c/d + NLS).
     orig_doc: Document gốc (tùy chọn) → copy ảnh và OMML vào từng bước tương ứng.
     """
-    # Thu thập đoạn có media từ file gốc nếu có
-    media_map: dict = _collect_media_paras(orig_doc) if orig_doc else {}
+    # Thu thập toàn bộ nội dung (text GV/HS + ảnh + OMML) từ file gốc
+    media_map: dict = _collect_section_content(orig_doc) if orig_doc else {}
     doc = Document()
     for sec in doc.sections:
         sec.top_margin = Cm(2.0); sec.bottom_margin = Cm(2.0)
@@ -3672,13 +3700,26 @@ def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str,
         _sub("c", "Sản phẩm dự kiến",      san_pham,
              "(Mô tả kết quả học sinh cần hoàn thành)")
 
-        # d) Tổ chức thực hiện + NLS
+        # d) Tổ chức thực hiện
+        # Ưu tiên: nội dung gốc (text GV/HS + ảnh + OMML) từ file gốc
+        # Fallback: text AI sinh ra
         p_d = _p(indent_cm=0.5, before=2, after=1)
-        _r(p_d, "d) Tổ chức thực hiện: ", bold=True, pt=14)
-        if to_chuc:
-            _r(p_d, to_chuc, pt=14)
+        _r(p_d, "d) Tổ chức thực hiện:", bold=True, pt=14)
+
+        orig_elems = media_map.get(sk, [])
+        if orig_elems:
+            # Copy nguyên văn từ file gốc — giữ GV/HS activities + ảnh + OMML
+            for pe in orig_elems:
+                try:
+                    new_pe = _copy_para_with_media(pe, orig_doc, doc)
+                    _append_elem_to_doc(doc, new_pe)
+                except Exception as e:
+                    logger.warning(f"copy section content buoc={sk}: {e}")
+        elif to_chuc:
+            # Fallback: AI text nếu không tìm được nội dung gốc
+            _r(p_d, f" {to_chuc}", pt=14)
         else:
-            _r(p_d, "(Giáo viên mô tả các bước tổ chức hoạt động)", italic=True, pt=14)
+            _r(p_d, " (Giáo viên mô tả các bước tổ chức hoạt động)", italic=True, pt=14)
 
         # NLS inline — chèn sau d) Tổ chức
         if nls_list:
@@ -3689,18 +3730,6 @@ def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str,
                 _r(pn, f"+ {item.get('ma','')}: {item.get('mo_ta','')}", pt=13)
                 if item.get("cong_cu"):
                     _r(pn, f"  ▶ Công cụ thực hiện: {item['cong_cu']}", italic=True, pt=13)
-
-        # ── Chèn ảnh / OMML từ file gốc tương ứng với bước này ──────────────
-        media_elems = media_map.get(sk, [])
-        if media_elems:
-            lbl = _p(indent_cm=0.5, before=3, after=1)
-            _r(lbl, "Hình ảnh / Công thức từ giáo án gốc:", italic=True, pt=12)
-            for pe in media_elems:
-                try:
-                    new_pe = _copy_para_with_media(pe, orig_doc, doc)
-                    _append_elem_to_doc(doc, new_pe)
-                except Exception as e:
-                    logger.warning(f"copy media buoc={sk}: {e}")
 
     # ── IV. Điều chỉnh sau bài dạy ───────────────────────────────────────────
     dc_h = _p(before=8, after=3)
