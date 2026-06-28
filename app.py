@@ -3511,6 +3511,87 @@ def _collect_section_content(orig_doc) -> dict:
     return result
 
 
+def _make_gv_hs_table(doc, orig_elems: list, src_doc) -> None:
+    """
+    Tạo bảng 2 cột 'Hoạt động của GV | Hoạt động của HS' từ nội dung file gốc.
+    Tự động phân chia theo prefix GV:/HS: hoặc từ khóa vai trò trong văn bản.
+    Ảnh và OMML được copy đúng cột tương ứng.
+    """
+    GV_KW = ["gv:", "giao vien:", "gv chuyên giao", "chuyen giao nhiem vu",
+              "gv thong bao", "gv theo doi", "gv ket luan", "gv nhan xet",
+              "gv danh gia", "gv huong dan", "ket luan", "nhan dinh"]
+    HS_KW = ["hs:", "hoc sinh:", "thuc hien nhiem vu", "hs thuc hien",
+              "bao cao thao luan", "hs bao cao", "hs tra loi", "hs lam",
+              "hs quan sat", "hs nhan xet"]
+
+    gv_elems: list = []
+    hs_elems: list = []
+    col = "gv"   # mặc định GV đầu tiên
+
+    for pe in orig_elems:
+        txt = "".join(t.text or "" for t in pe.iter(f"{{{W_NS}}}t")).strip()
+        tn  = _norm(txt)
+
+        if any(tn.startswith(kw) or kw in tn for kw in GV_KW):
+            col = "gv"
+        elif any(tn.startswith(kw) or kw in tn for kw in HS_KW):
+            col = "hs"
+
+        if col == "gv":
+            gv_elems.append(pe)
+        else:
+            hs_elems.append(pe)
+
+    # ── Tạo bảng 2 cột ────────────────────────────────────────────────────────
+    tbl = doc.add_table(rows=1, cols=2)
+    tbl.style = "Table Grid"
+
+    # Cố định độ rộng bảng ~16 cm, mỗi cột 8 cm
+    from docx.oxml.ns import qn as _qn
+    tbl._tbl.get_or_add_tblPr()
+    tblW = OxmlElement("w:tblW")
+    tblW.set(_qn("w:w"), "9072"); tblW.set(_qn("w:type"), "dxa")  # 16cm
+    tbl._tbl.tblPr.append(tblW)
+
+    def _set_col_w(cell, cm):
+        tcPr = cell._tc.get_or_add_tcPr()
+        tcW  = OxmlElement("w:tcW")
+        tcW.set(_qn("w:w"), str(int(cm * 567))); tcW.set(_qn("w:type"), "dxa")
+        tcPr.append(tcW)
+
+    # ── Header ─────────────────────────────────────────────────────────────────
+    hdr = tbl.rows[0].cells
+    _set_col_w(hdr[0], 8); _set_col_w(hdr[1], 8)
+    for cell, title in [(hdr[0], "Hoạt động của GV"), (hdr[1], "Hoạt động của HS")]:
+        r = cell.paragraphs[0].add_run(title)
+        r.bold = True; r.font.name = "Times New Roman"; r.font.size = Pt(13)
+        cell.paragraphs[0].alignment = 1   # center
+
+    # ── Content row ────────────────────────────────────────────────────────────
+    row   = tbl.add_row()
+    gv_c  = row.cells[0]; hs_c = row.cells[1]
+    _set_col_w(gv_c, 8);  _set_col_w(hs_c, 8)
+
+    def _fill_cell(cell, elems):
+        first = True
+        for pe in elems:
+            try:
+                new_p = _copy_para_with_media(pe, src_doc, doc)
+                if first:
+                    # Dùng paragraphs[0] sẵn có (rỗng) làm hàng đầu
+                    cell._tc.insert(
+                        list(cell._tc).index(cell.paragraphs[0]._p) + 1, new_p
+                    )
+                    first = False
+                else:
+                    cell._tc.append(new_p)
+            except Exception as e:
+                logger.warning(f"_fill_cell: {e}")
+
+    _fill_cell(gv_c, gv_elems)
+    _fill_cell(hs_c, hs_elems if hs_elems else gv_elems)  # fallback nếu không tách được
+
+
 def _append_elem_to_doc(doc, elem) -> None:
     """Chèn lxml element vào body doc, ngay trước <w:sectPr>."""
     body   = doc.element.body
@@ -3707,14 +3788,9 @@ def _make_5512_docx(analysis: dict, mon_name: str, cap_name: str,
         _r(p_d, "d) Tổ chức thực hiện:", bold=True, pt=14)
 
         orig_elems = media_map.get(sk, [])
-        if orig_elems:
-            # Copy nguyên văn từ file gốc — giữ GV/HS activities + ảnh + OMML
-            for pe in orig_elems:
-                try:
-                    new_pe = _copy_para_with_media(pe, orig_doc, doc)
-                    _append_elem_to_doc(doc, new_pe)
-                except Exception as e:
-                    logger.warning(f"copy section content buoc={sk}: {e}")
+        if orig_elems and orig_doc:
+            # Tạo bảng 2 cột GV | HS từ nội dung file gốc (giữ text + ảnh + OMML)
+            _make_gv_hs_table(doc, orig_elems, orig_doc)
         elif to_chuc:
             # Fallback: AI text nếu không tìm được nội dung gốc
             _r(p_d, f" {to_chuc}", pt=14)
